@@ -1,0 +1,147 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-inter: 'Inter', sans-serif;
+
+    --background: 220 20% 97%;
+    --foreground: 0 0% 17%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 17%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 17%;
+    --primary: 208 75% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 94%;
+    --secondary-foreground: 0 0% 17%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 130 55% 46%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 4 82% 49%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 89%;
+    --input: 220 13% 89%;
+    --ring: 208 75% 42%;
+    --chart-1: 4 82% 49%;
+    --chart-2: 208 75% 42%;
+    --chart-3: 130 55% 46%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.625rem;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 17%;
+    --sidebar-primary: 208 75% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 14% 94%;
+    --sidebar-accent-foreground: 0 0% 17%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 208 75% 42%;
+  }
+
+  /* Auto dark mode from system preference */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: 220 15% 8%;
+      --foreground: 0 0% 95%;
+      --card: 220 15% 12%;
+      --card-foreground: 0 0% 95%;
+      --popover: 220 15% 12%;
+      --popover-foreground: 0 0% 95%;
+      --primary: 208 75% 50%;
+      --primary-foreground: 0 0% 100%;
+      --secondary: 220 15% 18%;
+      --secondary-foreground: 0 0% 95%;
+      --muted: 220 15% 18%;
+      --muted-foreground: 0 0% 60%;
+      --accent: 130 55% 46%;
+      --accent-foreground: 0 0% 100%;
+      --destructive: 4 82% 49%;
+      --destructive-foreground: 0 0% 100%;
+      --border: 220 15% 20%;
+      --input: 220 15% 20%;
+      --ring: 208 75% 50%;
+      --chart-1: 4 82% 55%;
+      --chart-2: 208 75% 55%;
+      --chart-3: 130 55% 50%;
+      --chart-4: 43 74% 66%;
+      --chart-5: 27 87% 67%;
+      --sidebar-background: 220 15% 10%;
+      --sidebar-foreground: 0 0% 95%;
+      --sidebar-primary: 208 75% 50%;
+      --sidebar-primary-foreground: 0 0% 100%;
+      --sidebar-accent: 220 15% 16%;
+      --sidebar-accent-foreground: 0 0% 95%;
+      --sidebar-border: 220 15% 18%;
+      --sidebar-ring: 208 75% 50%;
+    }
+  }
+
+  .dark {
+    --background: 220 15% 8%;
+    --foreground: 0 0% 95%;
+    --card: 220 15% 12%;
+    --card-foreground: 0 0% 95%;
+    --popover: 220 15% 12%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 208 75% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 15% 18%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 220 15% 18%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 130 55% 46%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 4 82% 49%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 15% 20%;
+    --input: 220 15% 20%;
+    --ring: 208 75% 50%;
+    --chart-1: 4 82% 55%;
+    --chart-2: 208 75% 55%;
+    --chart-3: 130 55% 50%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --sidebar-background: 220 15% 10%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 208 75% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 16%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 220 15% 18%;
+    --sidebar-ring: 208 75% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-inter;
+    overscroll-behavior: none;
+    /* Safe area padding for notched/home-indicator devices */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Disable text selection on interactive UI elements */
+  button, a, nav, [role="tab"], [role="button"] {
+    @apply select-none;
+  }
+
+  /* Minimum 44px touch targets for all primary buttons */
+  button, a {
+    min-height: 44px;
+  }
+  /* Restore inline/icon buttons that shouldn't be tall */
+  button.inline-btn, a.inline-btn {
+    min-height: unset;
+  }
+}
