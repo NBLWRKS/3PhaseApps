@@ -73,4 +73,46 @@ app.listen(PORT, () => {
   if ((process.env.JWT_SECRET || 'change-me-in-production') === 'change-me-in-production') {
     console.warn('WARNING: JWT_SECRET is using the insecure default. Set it in your .env before going live.');
   }
+  startKeepAlive();
 });
+
+// --- Keep-alive (free-tier anti-spindown) ---------------------------------
+// Render's free web services spin down after ~15 min without inbound HTTP
+// traffic. To prevent that, the server periodically requests its OWN public
+// /api/health endpoint. The request must go through the public URL (not
+// localhost) so Render's router registers it as inbound traffic and resets the
+// idle timer. /api/health is intentionally trivial (no DB, no auth) so each
+// ping is about as cheap as a request can be.
+//
+// Enable by setting KEEP_ALIVE=true and KEEP_ALIVE_URL (or PUBLIC_URL) to the
+// service's public URL. Off by default so it never runs locally or in dev.
+function startKeepAlive() {
+  if ((process.env.KEEP_ALIVE || 'false') !== 'true') return;
+
+  const base = process.env.KEEP_ALIVE_URL || process.env.PUBLIC_URL;
+  if (!base) {
+    console.warn('[keep-alive] enabled but no KEEP_ALIVE_URL/PUBLIC_URL set; skipping.');
+    return;
+  }
+  const url = `${base.replace(/\/+$/, '')}/api/health`;
+
+  // Default every 12 minutes — comfortably under Render's ~15 min idle window.
+  const minutes = Number(process.env.KEEP_ALIVE_MINUTES || 12);
+  const intervalMs = Math.max(1, minutes) * 60 * 1000;
+
+  const ping = async () => {
+    try {
+      const res = await fetch(url, { method: 'GET' });
+      // Drain the (tiny) body so the socket closes cleanly.
+      await res.text();
+    } catch (err) {
+      // Non-fatal: a missed ping just means one idle window wasn't reset.
+      console.warn(`[keep-alive] ping failed: ${err.message}`);
+    }
+  };
+
+  console.log(`[keep-alive] pinging ${url} every ${minutes} min`);
+  // unref() so this timer never keeps the process alive on its own / blocks exit.
+  const timer = setInterval(ping, intervalMs);
+  if (timer.unref) timer.unref();
+}

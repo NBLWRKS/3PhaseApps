@@ -14,7 +14,7 @@ services:
     runtime: node
     plan: starter            # Persistent disks require a paid instance (not free).
     rootDir: server
-    buildCommand: npm install
+    buildCommand: npm install --include=optional
     startCommand: node src/index.js
     healthCheckPath: /api/health
     disk:
@@ -36,6 +36,15 @@ services:
         value: "true"
       - key: REQUIRE_OTP
         value: "false"
+      # Keep-alive: ping own /api/health to avoid free-tier spin-down.
+      - key: KEEP_ALIVE
+        value: "true"
+      - key: KEEP_ALIVE_MINUTES
+        value: "12"
+      # KEEP_ALIVE_URL falls back to PUBLIC_URL if unset; both should be this
+      # service's public URL. Set after the first deploy reveals the URL.
+      - key: KEEP_ALIVE_URL
+        sync: false
       # The API's own public URL (used to build absolute image/PDF links).
       # Set to this service's URL or your api custom domain after first deploy.
       - key: PUBLIC_URL
