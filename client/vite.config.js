@@ -9,6 +9,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 export default defineConfig({
   logLevel: 'error',
   plugins: [react()],
+  // pdfjs-dist 4.x uses top-level await; target browsers that support it.
+  build: {
+    target: 'es2022',
+  },
+  esbuild: {
+    target: 'es2022',
+  },
+  optimizeDeps: {
+    esbuildOptions: { target: 'es2022' },
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
