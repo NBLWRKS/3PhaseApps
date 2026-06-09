@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { base44 } from '@/api/base44Client';
+import { renderPdfFirstPage } from '@/lib/pdf-render';
 import logo from '@/assets/logo.jpg';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -91,7 +92,16 @@ export default function Highlight() {
     setError('');
     setConverting(true);
     try {
-      const { file_url, width, height } = await base44.highlight.convertPdf(file);
+      // Render the PDF to a PNG entirely in the browser (no server conversion).
+      const { blob, width, height } = await renderPdfFirstPage(file);
+      // Persist the rendered image via the standard upload endpoint so it's
+      // saved in the archive and viewable later by other users.
+      const pngFile = new File(
+        [blob],
+        `${file.name.replace(/\.pdf$/i, '') || 'highlight'}.png`,
+        { type: 'image/png' }
+      );
+      const { file_url } = await base44.integrations.Core.UploadFile({ file: pngFile });
       setImageUrl(file_url);
       setImageDims({ width, height });
       setRegions([]);
@@ -99,10 +109,10 @@ export default function Highlight() {
       if (title === 'Untitled' && file.name) {
         setTitle(file.name.replace(/\.pdf$/i, ''));
       }
-      toast.success('PDF converted');
+      toast.success('PDF loaded');
     } catch (err) {
-      setError(err.message || 'Conversion failed');
-      toast.error(err.message || 'Conversion failed');
+      setError(err.message || 'Could not load PDF');
+      toast.error(err.message || 'Could not load PDF');
     } finally {
       setConverting(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
