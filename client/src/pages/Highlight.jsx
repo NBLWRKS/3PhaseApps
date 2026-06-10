@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  ArrowLeft, Upload, Loader2, Trash2, Save, Highlighter, Plus, FolderOpen, X, Zap, Wrench,
+  ArrowLeft, Upload, Loader2, Trash2, Save, Highlighter, Plus, FolderOpen, X, Zap, Wrench, Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -38,6 +38,7 @@ export default function Highlight() {
   const [converting, setConverting] = useState(false);
   const [progress, setProgress] = useState('');
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState('');
 
   const [savedDocs, setSavedDocs] = useState([]);
@@ -243,6 +244,30 @@ export default function Highlight() {
       toast.error(err.message || 'Save failed');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const exportPdf = async () => {
+    if (!hasPages) return;
+    setExporting(true);
+    setError('');
+    try {
+      await base44.highlight.exportPdf({
+        title,
+        project,
+        team,
+        pages,
+        image_url: pages[0]?.url || '',
+        image_width: pages[0]?.width || 0,
+        image_height: pages[0]?.height || 0,
+        regions,
+      });
+      toast.success('PDF exported');
+    } catch (err) {
+      setError(err.message || 'Export failed');
+      toast.error(err.message || 'Export failed');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -541,6 +566,10 @@ export default function Highlight() {
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                   {docId ? 'Update document' : 'Save document'}
                 </Button>
+                <Button variant="outline" onClick={exportPdf} disabled={exporting} className="gap-2 w-full">
+                  {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  Export PDF
+                </Button>
                 <Button variant="outline" onClick={newDoc} className="gap-2 w-full">
                   <Plus className="w-4 h-4" />
                   New document
@@ -651,6 +680,13 @@ export default function Highlight() {
                         </p>
                       )}
                     </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); base44.highlight.exportPdf(d).then(() => toast.success('PDF exported')).catch((err) => toast.error(err.message || 'Export failed')); }}
+                      className="text-muted-foreground hover:text-primary p-1"
+                      title="Export PDF"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
                     <button onClick={(e) => deleteDoc(d.id, e)} className="text-muted-foreground hover:text-destructive p-1">
                       <Trash2 className="w-4 h-4" />
                     </button>
