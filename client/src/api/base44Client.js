@@ -139,6 +139,34 @@ const highlight = {
   create: (data) => request('POST', '/highlight', { body: data }),
   update: (id, data) => request('PUT', `/highlight/${id}`, { body: data }),
   delete: (id) => request('DELETE', `/highlight/${id}`),
+  // Build a flattened PDF (page images + highlights) of the current document
+  // state and trigger a browser download. Works before saving.
+  exportPdf: async (data) => {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/highlight/export`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      let msg = res.statusText;
+      try { const j = await res.json(); msg = j.error || msg; } catch { /* non-json */ }
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    const safe = (data.title || 'highlight').replace(/[^\w.-]+/g, '_').slice(0, 80);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${safe}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
 };
 
 export const base44 = {
