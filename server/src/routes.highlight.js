@@ -7,6 +7,7 @@ import db from './db.js';
 import { authRequired, appAccessRequired } from './auth.js';
 import { uploadDir } from './routes.uploads.js';
 import { pdfFirstPageToPng } from './pdf-to-png.js';
+import { buildHighlightPdf } from './export-pdf.js';
 
 const router = express.Router();
 const now = () => new Date().toISOString();
@@ -59,6 +60,45 @@ router.post('/convert', upload.single('file'), async (req, res) => {
       ? 'The PDF took too long to render. It may be very large or complex.'
       : null;
     res.status(500).json({ error: `Failed to convert PDF: ${msg}`, hint });
+  }
+});
+
+function sendPdf(res, buffer, filename) {
+  const safe = (filename || 'highlight').replace(/[^\w.-]+/g, '_').slice(0, 80);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${safe}.pdf"`);
+  res.send(buffer);
+}
+
+// POST /api/highlight/export  { title, project, team, pages, regions, image_* }
+// Flattens the CURRENT (possibly unsaved) document state to a PDF and returns it
+// as a download. Lets the user export edits without saving first.
+router.post('/export', async (req, res) => {
+  try {
+    const data = req.body || {};
+    const pages = Array.isArray(data.pages) ? data.pages : [];
+    if (!pages.length && !data.image_url) {
+      return res.status(400).json({ error: 'Nothing to export (load a PDF first)' });
+    }
+    const pdf = await buildHighlightPdf(data);
+    sendPdf(res, pdf, data.title || 'highlight');
+  } catch (err) {
+    console.error('[highlight/export] failed:', err && err.stack ? err.stack : err);
+    res.status(500).json({ error: `Failed to export PDF: ${err.message}` });
+  }
+});
+
+// GET /api/highlight/:id/export -> flattened PDF of a SAVED document.
+router.get('/:id/export', async (req, res) => {
+  try {
+    const row = db.prepare('SELECT * FROM highlights WHERE id = ?').get(req.params.id);
+    if (!row) return res.status(404).json({ error: 'Document not found' });
+    const docData = rowToDoc(row);
+    const pdf = await buildHighlightPdf(docData);
+    sendPdf(res, pdf, docData.title || 'highlight');
+  } catch (err) {
+    console.error('[highlight/export] failed:', err && err.stack ? err.stack : err);
+    res.status(500).json({ error: `Failed to export PDF: ${err.message}` });
   }
 });
 
