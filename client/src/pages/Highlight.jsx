@@ -42,6 +42,8 @@ export default function Highlight() {
 
   const [savedDocs, setSavedDocs] = useState([]);
   const [showLibrary, setShowLibrary] = useState(false);
+  const [libTeamFilter, setLibTeamFilter] = useState('all'); // all|electrical|mechanical
+  const [libSort, setLibSort] = useState('recent'); // recent|oldest|title
 
   // Drawing state
   const fileInputRef = useRef(null);
@@ -54,6 +56,26 @@ export default function Highlight() {
   const hasPages = pages.length > 0;
   const isAdmin = user?.role === 'admin';
   const canAccess = isAdmin || (user?.app_permissions || []).includes('highlight');
+
+  // Library: apply the team filter, then sort. Pure client-side over loaded docs.
+  const visibleDocs = React.useMemo(() => {
+    let list = savedDocs;
+    if (libTeamFilter !== 'all') {
+      list = list.filter((d) => (d.team || '') === libTeamFilter);
+    }
+    const sorted = [...list];
+    if (libSort === 'title') {
+      sorted.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' }));
+    } else if (libSort === 'oldest') {
+      sorted.sort((a, b) => new Date(a.created_date || 0) - new Date(b.created_date || 0));
+    } else {
+      // recent (default): newest edit first, falling back to created date
+      sorted.sort((a, b) =>
+        new Date(b.updated_date || b.created_date || 0) - new Date(a.updated_date || a.created_date || 0)
+      );
+    }
+    return sorted;
+  }, [savedDocs, libTeamFilter, libSort]);
 
   // Load saved documents for the library drawer.
   const loadDocs = useCallback(async () => {
@@ -540,11 +562,63 @@ export default function Highlight() {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Team filter */}
+            <div className="mb-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Team</p>
+              <div className="flex gap-1.5">
+                {[
+                  { value: 'all', label: 'All', Icon: null },
+                  { value: 'electrical', label: 'Electrical', Icon: Zap },
+                  { value: 'mechanical', label: 'Mechanical', Icon: Wrench },
+                ].map(({ value, label, Icon }) => (
+                  <button
+                    key={value}
+                    onClick={() => setLibTeamFilter(value)}
+                    className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
+                      libTeamFilter === value
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'border-border text-muted-foreground hover:bg-secondary'
+                    }`}
+                  >
+                    {Icon && <Icon className="w-3 h-3" />}
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Sort */}
+            <div className="mb-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Sort by</p>
+              <div className="flex gap-1.5">
+                {[
+                  { value: 'recent', label: 'Most recent' },
+                  { value: 'oldest', label: 'Oldest' },
+                  { value: 'title', label: 'Title A–Z' },
+                ].map(({ value, label }) => (
+                  <button
+                    key={value}
+                    onClick={() => setLibSort(value)}
+                    className={`text-xs font-medium px-2.5 py-1.5 rounded-md border transition-colors ${
+                      libSort === value
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'border-border text-muted-foreground hover:bg-secondary'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {savedDocs.length === 0 ? (
               <p className="text-muted-foreground text-sm">No saved documents yet.</p>
+            ) : visibleDocs.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No documents match this filter.</p>
             ) : (
               <div className="space-y-2">
-                {savedDocs.map((d) => (
+                {visibleDocs.map((d) => (
                   <button
                     key={d.id}
                     onClick={() => openDoc(d.id)}
