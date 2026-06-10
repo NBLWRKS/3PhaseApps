@@ -86,4 +86,3 @@ ensureColumn('highlights', 'project', 'TEXT');
 ensureColumn('highlights', 'team', 'TEXT');
 
 export default db;
-  
