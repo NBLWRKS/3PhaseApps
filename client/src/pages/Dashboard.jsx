@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
+import { canEdit } from '@/lib/permissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -27,6 +28,7 @@ export default function Dashboard() {
   const { user } = useAuth();
 
   const isAdmin = user?.role === 'admin';
+  const canEditReports = canEdit(user, 'reports');
 
   const { data: reports = [], isLoading, refetch } = useQuery({
     queryKey: ['reports', user?.email, isAdmin],
@@ -120,7 +122,7 @@ export default function Dashboard() {
         </div>
         <Dialog open={typeDialogOpen} onOpenChange={setTypeDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2 shadow-md min-h-[44px]">
+            <Button className={`gap-2 shadow-md min-h-[44px] ${canEditReports ? '' : 'hidden'}`}>
               <FilePlus className="w-4 h-4" />
               New Report
             </Button>
