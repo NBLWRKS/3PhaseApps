@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
+import { canEdit } from '@/lib/permissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -126,6 +127,16 @@ export default function ReportEditor() {
     return (
       <div className="text-center py-20">
         <p className="text-muted-foreground">You don't have permission to edit this report.</p>
+        <button onClick={() => navigate('/reports')} className="text-primary mt-4 inline-block">Go back</button>
+      </div>
+    );
+  }
+
+  // Read-only Reports users cannot edit at all.
+  if (!canEdit(user, 'reports')) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-muted-foreground">You have read-only access to Reports.</p>
         <button onClick={() => navigate('/reports')} className="text-primary mt-4 inline-block">Go back</button>
       </div>
     );
