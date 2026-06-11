@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { nanoid } from 'nanoid';
 import db from './db.js';
-import { authRequired, appAccessRequired } from './auth.js';
+import { authRequired, appReadRequired, appEditRequired } from './auth.js';
 import { uploadDir } from './routes.uploads.js';
 import { pdfFirstPageToPng } from './pdf-to-png.js';
 import { buildHighlightPdf } from './export-pdf.js';
@@ -22,7 +22,9 @@ const upload = multer({
 });
 
 router.use(authRequired);
-router.use(appAccessRequired('highlight'));
+// Read access required for all highlight routes; create/update/delete and the
+// PDF-convert upload additionally require edit access (applied per-route).
+router.use(appReadRequired('highlight'));
 
 function rowToDoc(row) {
   if (!row) return null;
@@ -35,7 +37,7 @@ function rowToDoc(row) {
 
 // POST /api/highlight/convert  (multipart, field "file": a PDF)
 // Converts page 1 to PNG, stores it, returns { file_url, width, height }.
-router.post('/convert', upload.single('file'), async (req, res) => {
+router.post('/convert', appEditRequired('highlight'), upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No PDF uploaded' });
   const tag = `[highlight/convert ${nanoid(5)}]`;
   const sizeKb = Math.round((req.file.size || req.file.buffer.length) / 1024);
@@ -116,7 +118,7 @@ router.get('/:id', (req, res) => {
 });
 
 // POST /api/highlight  { title, image_url, image_width, image_height, regions }
-router.post('/', (req, res) => {
+router.post('/', appEditRequired('highlight'), (req, res) => {
   const data = req.body || {};
   if (!data.image_url) return res.status(400).json({ error: 'image_url is required (convert a PDF first)' });
   const id = nanoid();
@@ -143,7 +145,7 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/highlight/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', appEditRequired('highlight'), (req, res) => {
   const existing = db.prepare('SELECT * FROM highlights WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Document not found' });
   const data = req.body || {};
@@ -171,7 +173,7 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE /api/highlight/:id
-router.delete('/:id', (req, res) => {
+router.delete('/:id', appEditRequired('highlight'), (req, res) => {
   db.prepare('DELETE FROM highlights WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
