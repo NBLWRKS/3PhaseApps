@@ -1,7 +1,7 @@
 import express from 'express';
 import db from './db.js';
 import { authRequired, adminRequired } from './auth.js';
-import { APPS, sanitizePermissions } from './apps.js';
+import { APPS, sanitizePermissions, normalizePermissions } from './apps.js';
 
 const router = express.Router();
 const now = () => new Date().toISOString();
@@ -22,7 +22,7 @@ router.get('/users', (_req, res) => {
   const users = rows.map((u) => ({
     ...u,
     app_permissions: (() => {
-      try { return JSON.parse(u.app_permissions || '[]'); } catch { return []; }
+      try { return normalizePermissions(JSON.parse(u.app_permissions || '{}')); } catch { return {}; }
     })(),
   }));
   res.json(users);
@@ -49,7 +49,7 @@ router.put('/users/:id', (req, res) => {
     .run(role, perms, now(), target.id);
 
   const updated = db.prepare('SELECT id, email, full_name, role, app_permissions, created_date FROM users WHERE id = ?').get(target.id);
-  updated.app_permissions = (() => { try { return JSON.parse(updated.app_permissions || '[]'); } catch { return []; } })();
+  updated.app_permissions = (() => { try { return normalizePermissions(JSON.parse(updated.app_permissions || '{}')); } catch { return {}; } })();
   res.json(updated);
 });
 
