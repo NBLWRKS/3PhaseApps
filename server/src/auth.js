@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import db from './db.js';
+import { normalizePermissions, hasAppLevel } from './apps.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 const JWT_EXPIRES = '30d';
@@ -27,9 +28,9 @@ export function getUserFromToken(token) {
     const user = db.prepare('SELECT id, email, full_name, role, app_permissions, created_date, updated_date FROM users WHERE id = ?').get(payload.sub);
     if (!user) return null;
     try {
-      user.app_permissions = JSON.parse(user.app_permissions || '[]');
+      user.app_permissions = normalizePermissions(JSON.parse(user.app_permissions || '{}'));
     } catch {
-      user.app_permissions = [];
+      user.app_permissions = {};
     }
     return user;
   } catch {
@@ -58,18 +59,33 @@ export function adminRequired(req, res, next) {
   next();
 }
 
-// Gate a route behind access to a specific app. Admins always pass; regular
-// users must have the app key in their app_permissions list.
-export function appAccessRequired(appKey) {
+// Gate a route behind a permission LEVEL for a specific app. Admins always
+// pass. Regular users must have at least the required level ('read' or 'edit')
+// for the app. 'edit' implies 'read'.
+function appLevelRequired(appKey, level) {
   return (req, res, next) => {
     if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
     if (req.user.role === 'admin') return next();
-    const perms = Array.isArray(req.user.app_permissions) ? req.user.app_permissions : [];
-    if (!perms.includes(appKey)) {
-      return res.status(403).json({ error: 'You do not have access to this application' });
-    }
-    next();
+    if (hasAppLevel(req.user.app_permissions, appKey, level)) return next();
+    const msg = level === 'edit'
+      ? 'You have read-only access to this application'
+      : 'You do not have access to this application';
+    return res.status(403).json({ error: msg });
   };
+}
+
+// Read access: viewing/listing/exporting. Edit access: create/update/delete.
+export function appReadRequired(appKey) {
+  return appLevelRequired(appKey, 'read');
+}
+export function appEditRequired(appKey) {
+  return appLevelRequired(appKey, 'edit');
+}
+
+// Back-compat: old code called appAccessRequired(appKey) for any access.
+// Treat that as a read-level gate (mutating routes now use appEditRequired).
+export function appAccessRequired(appKey) {
+  return appLevelRequired(appKey, 'read');
 }
 
 export function optionalAuth(req, _res, next) {
