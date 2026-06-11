@@ -18,9 +18,9 @@ const OPEN_SIGNUP = (process.env.OPEN_SIGNUP || 'true') === 'true';
 function createUser(email, password, role = 'user') {
   const id = nanoid();
   const ts = now();
-  // New users get access to Reports by default. Admins can adjust this later
-  // in the admin panel. Set explicitly rather than relying on a column default.
-  const defaultPerms = JSON.stringify(['reports']);
+  // New users get read access to Reports by default. Admins can grant edit or
+  // add other apps later in the admin panel. Object form: { app: 'read'|'edit' }.
+  const defaultPerms = JSON.stringify({ reports: 'read' });
   db.prepare(
     `INSERT INTO users (id, email, password_hash, role, app_permissions, created_date, updated_date)
      VALUES (?, ?, ?, ?, ?, ?, ?)`
