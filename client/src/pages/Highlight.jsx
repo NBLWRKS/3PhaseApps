@@ -3,6 +3,7 @@ import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import { base44 } from '@/api/base44Client';
 import { renderPdfAllPages } from '@/lib/pdf-render';
+import { canRead, canEdit } from '@/lib/permissions';
 import logo from '@/assets/logo.jpg';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -56,7 +57,8 @@ export default function Highlight() {
 
   const hasPages = pages.length > 0;
   const isAdmin = user?.role === 'admin';
-  const canAccess = isAdmin || (user?.app_permissions || []).includes('highlight');
+  const canAccess = canRead(user, 'highlight');
+  const readOnly = !canEdit(user, 'highlight');
 
   // Library: apply the team filter, then sort. Pure client-side over loaded docs.
   const visibleDocs = React.useMemo(() => {
@@ -173,7 +175,7 @@ export default function Highlight() {
   };
 
   const onPointerDown = (e, pageIndex, imgEl) => {
-    if (!hasPages) return;
+    if (!hasPages || readOnly) return;
     e.preventDefault();
     const p = toNatural(e, pageIndex, imgEl);
     setDrawing({ page: pageIndex, x: p.x, y: p.y, w: 0, h: 0, ox: p.x, oy: p.y });
@@ -356,9 +358,13 @@ export default function Highlight() {
           /* Upload prompt */
           <div className="border-2 border-dashed border-border rounded-xl p-12 text-center bg-card">
             <Upload className="w-10 h-10 mx-auto text-muted-foreground mb-4" />
-            <h2 className="text-lg font-semibold mb-1">Upload a conveyor PDF</h2>
+            <h2 className="text-lg font-semibold mb-1">
+              {readOnly ? 'Open a saved document' : 'Upload a conveyor PDF'}
+            </h2>
             <p className="text-muted-foreground mb-6 text-sm">
-              Every page is converted to an image you can scroll through and mark up.
+              {readOnly
+                ? 'You have read-only access. Open a document from the Library to view or export it.'
+                : 'Every page is converted to an image you can scroll through and mark up.'}
             </p>
             <input
               ref={fileInputRef}
@@ -368,10 +374,17 @@ export default function Highlight() {
               className="hidden"
               id="pdf-input"
             />
-            <Button onClick={() => fileInputRef.current?.click()} disabled={converting} className="gap-2">
-              {converting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              {converting ? (progress || 'Loading…') : 'Choose PDF'}
-            </Button>
+            {readOnly ? (
+              <Button variant="outline" onClick={() => { setShowLibrary(true); loadDocs(); }} className="gap-2">
+                <FolderOpen className="w-4 h-4" />
+                Open Library
+              </Button>
+            ) : (
+              <Button onClick={() => fileInputRef.current?.click()} disabled={converting} className="gap-2">
+                {converting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {converting ? (progress || 'Loading…') : 'Choose PDF'}
+              </Button>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
@@ -420,7 +433,7 @@ export default function Highlight() {
                       </Button>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={converting} className="gap-2">
+                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={converting || readOnly} className={`gap-2 ${readOnly ? 'hidden' : ''}`}>
                     {converting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                     {converting ? (progress || 'Loading…') : 'Replace PDF'}
                   </Button>
@@ -546,15 +559,18 @@ export default function Highlight() {
                         <input
                           value={r.label}
                           onChange={(e) => renameRegion(r.id, e.target.value)}
-                          placeholder="Optional label"
+                          placeholder={readOnly ? '(no label)' : 'Optional label'}
+                          readOnly={readOnly}
                           className="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
                         />
                         {pages.length > 1 && (
                           <span className="text-[10px] text-muted-foreground flex-shrink-0">p{(r.page ?? 0) + 1}</span>
                         )}
-                        <button onClick={() => removeRegion(r.id)} className="text-muted-foreground hover:text-destructive">
-                          <X className="w-4 h-4" />
-                        </button>
+                        {!readOnly && (
+                          <button onClick={() => removeRegion(r.id)} className="text-muted-foreground hover:text-destructive">
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -562,18 +578,27 @@ export default function Highlight() {
               </div>
 
               <div className="flex flex-col gap-2 pt-2 border-t border-border">
-                <Button onClick={save} disabled={saving} className="gap-2 w-full">
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  {docId ? 'Update document' : 'Save document'}
-                </Button>
+                {readOnly && (
+                  <p className="text-xs text-muted-foreground mb-1">
+                    You have read-only access. You can view and export, but not edit.
+                  </p>
+                )}
+                {!readOnly && (
+                  <Button onClick={save} disabled={saving} className="gap-2 w-full">
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    {docId ? 'Update document' : 'Save document'}
+                  </Button>
+                )}
                 <Button variant="outline" onClick={exportPdf} disabled={exporting} className="gap-2 w-full">
                   {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                   Export PDF
                 </Button>
-                <Button variant="outline" onClick={newDoc} className="gap-2 w-full">
-                  <Plus className="w-4 h-4" />
-                  New document
-                </Button>
+                {!readOnly && (
+                  <Button variant="outline" onClick={newDoc} className="gap-2 w-full">
+                    <Plus className="w-4 h-4" />
+                    New document
+                  </Button>
+                )}
               </div>
             </aside>
           </div>
@@ -687,9 +712,11 @@ export default function Highlight() {
                     >
                       <Download className="w-4 h-4" />
                     </button>
-                    <button onClick={(e) => deleteDoc(d.id, e)} className="text-muted-foreground hover:text-destructive p-1">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {!readOnly && (
+                      <button onClick={(e) => deleteDoc(d.id, e)} className="text-muted-foreground hover:text-destructive p-1">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </button>
                 ))}
               </div>
