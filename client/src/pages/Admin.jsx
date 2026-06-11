@@ -79,11 +79,14 @@ export default function Admin() {
     }
   };
 
-  const toggleApp = (u, appKey) => {
-    const has = u.app_permissions.includes(appKey);
-    const app_permissions = has
-      ? u.app_permissions.filter((k) => k !== appKey)
-      : [...u.app_permissions, appKey];
+  // Set a user's permission level for an app: 'none' | 'read' | 'edit'.
+  const setAppLevel = (u, appKey, level) => {
+    const app_permissions = { ...(u.app_permissions || {}) };
+    if (level === 'none') {
+      delete app_permissions[appKey];
+    } else {
+      app_permissions[appKey] = level;
+    }
     saveUser(u.id, { app_permissions });
   };
 
@@ -177,16 +180,37 @@ export default function Admin() {
                           Admins have access to all applications.
                         </p>
                       ) : (
-                        <div className="flex flex-wrap gap-x-8 gap-y-3">
-                          {apps.map((app) => (
-                            <label key={app.key} className="flex items-center gap-2 cursor-pointer">
-                              <Switch
-                                checked={u.app_permissions.includes(app.key)}
-                                onCheckedChange={() => toggleApp(u, app.key)}
-                              />
-                              <span className="text-sm">{app.name}</span>
-                            </label>
-                          ))}
+                        <div className="space-y-3">
+                          {apps.map((app) => {
+                            const level = (u.app_permissions && u.app_permissions[app.key]) || 'none';
+                            return (
+                              <div key={app.key} className="flex items-center justify-between gap-4">
+                                <span className="text-sm font-medium">{app.name}</span>
+                                <div className="inline-flex rounded-md border border-border overflow-hidden">
+                                  {[
+                                    { value: 'none', label: 'No access' },
+                                    { value: 'read', label: 'Read' },
+                                    { value: 'edit', label: 'Edit' },
+                                  ].map((opt) => (
+                                    <button
+                                      key={opt.value}
+                                      onClick={() => setAppLevel(u, app.key, opt.value)}
+                                      disabled={savingId === u.id}
+                                      className={`px-3 py-1.5 text-xs font-medium transition-colors border-l border-border first:border-l-0 ${
+                                        level === opt.value
+                                          ? opt.value === 'none'
+                                            ? 'bg-muted text-foreground'
+                                            : 'bg-primary text-primary-foreground'
+                                          : 'bg-card text-muted-foreground hover:bg-secondary'
+                                      }`}
+                                    >
+                                      {opt.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
