@@ -52,9 +52,14 @@ export default function Landing() {
   }
 
   const isAdmin = user?.role === 'admin';
-  const perms = Array.isArray(user?.app_permissions) ? user.app_permissions : [];
-  // Admins implicitly have access to every app.
-  const canAccess = (key) => isAdmin || perms.includes(key);
+  // Admins implicitly have access to every app. Permissions are an object
+  // { appKey: 'read'|'edit' }; tolerate the legacy array form too.
+  const canAccess = (key) => {
+    if (isAdmin) return true;
+    const p = user?.app_permissions;
+    if (Array.isArray(p)) return p.includes(key);
+    return !!(p && p[key]);
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-hidden">
