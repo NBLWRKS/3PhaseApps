@@ -54,6 +54,7 @@ export default function Highlight() {
   const [drawing, setDrawing] = useState(null); // {page,x,y,w,h,ox,oy} natural px
   // renderScales[i] = displayed width / natural width for page i.
   const [renderScales, setRenderScales] = useState({});
+  const [zoom, setZoom] = useState(1); // 1 = fit width; >1 zooms in
 
   const hasPages = pages.length > 0;
   const isAdmin = user?.role === 'admin';
@@ -106,10 +107,11 @@ export default function Highlight() {
   }, [pages]);
 
   useEffect(() => {
-    updateScales();
+    // Recompute after the browser has applied the new layout (zoom width).
+    const raf = requestAnimationFrame(updateScales);
     window.addEventListener('resize', updateScales);
-    return () => window.removeEventListener('resize', updateScales);
-  }, [updateScales, pages]);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', updateScales); };
+  }, [updateScales, pages, zoom]);
 
   if (isLoadingAuth) {
     return (
@@ -447,6 +449,39 @@ export default function Highlight() {
                 />
               </div>
 
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-xs font-medium text-muted-foreground">Zoom</span>
+                <div className="inline-flex rounded-md border border-border overflow-hidden">
+                  <button
+                    onClick={() => setZoom((z) => Math.max(1, Math.round((z - 0.25) * 100) / 100))}
+                    disabled={zoom <= 1}
+                    className="px-2.5 py-1 text-sm text-muted-foreground hover:bg-secondary disabled:opacity-40 disabled:hover:bg-transparent"
+                    title="Zoom out"
+                  >
+                    −
+                  </button>
+                  <span className="px-2.5 py-1 text-xs font-medium border-x border-border min-w-[3.5rem] text-center tabular-nums">
+                    {Math.round(zoom * 100)}%
+                  </span>
+                  <button
+                    onClick={() => setZoom((z) => Math.min(4, Math.round((z + 0.25) * 100) / 100))}
+                    disabled={zoom >= 4}
+                    className="px-2.5 py-1 text-sm text-muted-foreground hover:bg-secondary disabled:opacity-40 disabled:hover:bg-transparent"
+                    title="Zoom in"
+                  >
+                    +
+                  </button>
+                </div>
+                {zoom !== 1 && (
+                  <button
+                    onClick={() => setZoom(1)}
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+
               <div className="space-y-6">
                 {pages.map((pg, pageIndex) => {
                   const scale = renderScales[pageIndex] || 1;
@@ -460,22 +495,23 @@ export default function Highlight() {
                           {regions.filter((r) => r.page === pageIndex).length} section(s)
                         </span>
                       </div>
-                      <div
-                        className="relative inline-block w-full border border-border rounded-lg overflow-hidden bg-muted select-none"
-                        style={{ cursor: 'crosshair', touchAction: 'none' }}
-                        onPointerDown={(e) => onPointerDown(e, pageIndex, e.currentTarget.querySelector('img'))}
-                        onPointerMove={(e) => onPointerMove(e, pageIndex, e.currentTarget.querySelector('img'))}
-                        onPointerUp={onPointerUp}
-                        onPointerLeave={onPointerUp}
-                      >
-                        <img
-                          ref={(el) => { pageImgRefs.current[pageIndex] = el; }}
-                          src={pg.url}
-                          alt={`Conveyor layout page ${pageIndex + 1}`}
-                          className="block w-full h-auto pointer-events-none"
-                          onLoad={updateScales}
-                          draggable={false}
-                        />
+                      <div className="overflow-auto border border-border rounded-lg bg-muted">
+                        <div
+                          className="relative select-none"
+                          style={{ width: `${zoom * 100}%`, cursor: 'crosshair', touchAction: 'none' }}
+                          onPointerDown={(e) => onPointerDown(e, pageIndex, e.currentTarget.querySelector('img'))}
+                          onPointerMove={(e) => onPointerMove(e, pageIndex, e.currentTarget.querySelector('img'))}
+                          onPointerUp={onPointerUp}
+                          onPointerLeave={onPointerUp}
+                        >
+                          <img
+                            ref={(el) => { pageImgRefs.current[pageIndex] = el; }}
+                            src={pg.url}
+                            alt={`Conveyor layout page ${pageIndex + 1}`}
+                            className="block w-full h-auto pointer-events-none"
+                            onLoad={updateScales}
+                            draggable={false}
+                          />
                         {/* Regions on this page */}
                         {regions.filter((r) => r.page === pageIndex).map((r) => (
                           <div
@@ -514,6 +550,7 @@ export default function Highlight() {
                             }}
                           />
                         )}
+                        </div>
                       </div>
                     </div>
                   );
