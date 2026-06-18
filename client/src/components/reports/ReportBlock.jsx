@@ -3,24 +3,44 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { ImagePlus, X, GripVertical, Trash2 } from 'lucide-react';
+import { ImagePlus, X, GripVertical, Trash2, Loader2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { toast } from 'sonner';
 
 export default function ReportBlock({ block, index, onUpdate, onRemove, canRemove }) {
   const fileInputRef = useRef(null);
 
+  const [uploading, setUploading] = React.useState(false);
+
   const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
-
-    const uploadPromises = files.map(async (file) => {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      return file_url;
-    });
-
-    const urls = await Promise.all(uploadPromises);
-    onUpdate('images', [...(block.images || []), ...urls]);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    setUploading(true);
+    try {
+      const results = await Promise.all(
+        files.map(async (file) => {
+          try {
+            const { file_url } = await base44.integrations.Core.UploadFile({ file });
+            return file_url || null;
+          } catch (err) {
+            return null;
+          }
+        })
+      );
+      const urls = results.filter(Boolean);
+      const failed = results.length - urls.length;
+      if (urls.length) {
+        onUpdate('images', [...(block.images || []), ...urls]);
+      }
+      if (failed > 0) {
+        toast.error(
+          `${failed} photo${failed === 1 ? '' : 's'} couldn't be uploaded. Try again, or use a JPG/PNG.`
+        );
+      }
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const removeImage = (idx) => {
@@ -76,10 +96,11 @@ export default function ReportBlock({ block, index, onUpdate, onRemove, canRemov
             {/* Upload button */}
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-28 h-28 rounded-lg border-2 border-dashed border-border hover:border-primary flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-primary transition-colors"
+              disabled={uploading}
+              className="w-28 h-28 rounded-lg border-2 border-dashed border-border hover:border-primary flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-primary transition-colors disabled:opacity-60"
             >
-              <ImagePlus className="w-5 h-5" />
-              <span className="text-xs font-medium">Add Photos</span>
+              {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
+              <span className="text-xs font-medium">{uploading ? 'Uploading…' : 'Add Photos'}</span>
             </button>
           </div>
 
