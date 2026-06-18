@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { nanoid } from 'nanoid';
 import db from './db.js';
 import { authRequired, adminRequired } from './auth.js';
-import { uploadDir } from './routes.uploads.js';
+import { uploadDir, publicBase } from './routes.uploads.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const router = express.Router();
@@ -100,10 +100,23 @@ router.post('/generatePdf', authRequired, async (req, res) => {
     for (const imgUrl of block.images || []) {
       const buf = await loadImageBuffer(imgUrl);
       if (!buf) continue;
-      if (doc.y > doc.page.height - 220) doc.addPage();
+      const maxH = 280;
+      // Page-break if there isn't room for a reasonable image height.
+      if (doc.y > doc.page.height - margin - 80) doc.addPage();
       try {
-        doc.image(buf, { fit: [contentW, 240], align: 'center' });
-        doc.moveDown(0.5);
+        // Measure the scaled size so we can advance the cursor by the actual
+        // drawn height. pdfkit's doc.image() does NOT move doc.y on its own,
+        // which previously caused images to stack on top of each other.
+        const img = doc.openImage(buf);
+        const avail = doc.page.height - margin - doc.y;
+        const boxH = Math.min(maxH, avail);
+        const scale = Math.min(contentW / img.width, boxH / img.height);
+        const drawW = img.width * scale;
+        const drawH = img.height * scale;
+        const x = margin + (contentW - drawW) / 2; // center horizontally
+        const y = doc.y;
+        doc.image(img, x, y, { width: drawW, height: drawH });
+        doc.y = y + drawH + 10; // advance past the image + a small gap
       } catch {
         /* skip unsupported image formats (pdfkit supports JPEG/PNG) */
       }
@@ -114,8 +127,7 @@ router.post('/generatePdf', authRequired, async (req, res) => {
   doc.end();
 
   stream.on('finish', () => {
-    const base = process.env.PUBLIC_URL || '';
-    res.json({ data: { file_url: `${base}/uploads/${filename}` } });
+    res.json({ data: { file_url: `${publicBase()}/uploads/${filename}` } });
   });
   stream.on('error', (err) => res.status(500).json({ error: err.message }));
 });
