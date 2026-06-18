@@ -22,7 +22,13 @@ const upload = multer({
   storage,
   limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
   fileFilter: (_req, file, cb) => {
-    cb(null, /^image\//.test(file.mimetype));
+    // Accept standard images plus mobile formats (HEIC/HEIF from iPhone). Some
+    // mobile browsers send an empty or octet-stream mimetype, so also accept
+    // based on a recognized image file extension as a fallback.
+    const okMime = /^image\//i.test(file.mimetype)
+      || /^(application\/octet-stream)?$/i.test(file.mimetype || '');
+    const okExt = /\.(jpe?g|png|gif|webp|heic|heif|bmp|tiff?)$/i.test(file.originalname || '');
+    cb(null, okMime || okExt);
   },
 });
 
@@ -32,9 +38,20 @@ const router = express.Router();
 // Returns { file_url } to match base44 UploadFile response shape.
 router.post('/upload', authRequired, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  const base = process.env.PUBLIC_URL || '';
-  res.json({ file_url: `${base}/uploads/${req.file.filename}` });
+  res.json({ file_url: `${publicBase()}/uploads/${req.file.filename}` });
 });
+
+// Normalize PUBLIC_URL into a clean absolute origin with no trailing slash:
+//   "3phaseapps.com/"        -> "https://3phaseapps.com"
+//   "https://x.com/"         -> "https://x.com"
+//   ""                       -> "" (relative path fallback)
+export function publicBase() {
+  let base = (process.env.PUBLIC_URL || '').trim();
+  if (!base) return '';
+  base = base.replace(/\/+$/, ''); // strip trailing slashes
+  if (!/^https?:\/\//i.test(base)) base = `https://${base}`;
+  return base;
+}
 
 export { uploadDir };
 export default router;
