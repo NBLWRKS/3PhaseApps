@@ -57,6 +57,42 @@ export default function ReportView() {
       toast.error('No photos in this report');
       return;
     }
+
+    // Preferred path: desktop Chrome/Edge support the File System Access API,
+    // which lets the user pick a destination folder once and saves all photos
+    // there. Not available on Firefox/Safari/mobile — those fall back below.
+    if (typeof window.showDirectoryPicker === 'function') {
+      let dirHandle;
+      try {
+        dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      } catch (e) {
+        // User cancelled the folder picker — quietly stop, no error toast.
+        return;
+      }
+      setSavingPhotos(true);
+      try {
+        let saved = 0;
+        for (const { url, name } of allImages) {
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          const fileHandle = await dirHandle.getFileHandle(name, { create: true });
+          const writable = await fileHandle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          saved++;
+        }
+        toast.success(`${saved} photo${saved === 1 ? '' : 's'} saved to your chosen folder`);
+      } catch (e) {
+        toast.error('Failed to save photos to that folder');
+      } finally {
+        setSavingPhotos(false);
+      }
+      return;
+    }
+
+    // Fallback: browsers without the directory picker download each file to the
+    // default Downloads location (or prompt per-file if the browser is set to).
     setSavingPhotos(true);
     try {
       for (const { url, name } of allImages) {
@@ -71,7 +107,7 @@ export default function ReportView() {
         URL.revokeObjectURL(a.href);
         await new Promise(resolve => setTimeout(resolve, 300));
       }
-      toast.success(`${allImages.length} photo${allImages.length > 1 ? 's' : ''} saved`);
+      toast.success(`${allImages.length} photo${allImages.length > 1 ? 's' : ''} saved to Downloads`);
     } catch (e) {
       toast.error('Failed to save photos');
     } finally {
@@ -83,9 +119,28 @@ export default function ReportView() {
     setExporting(true);
     try {
       const res = await base44.functions.invoke('generatePdf', { reportId: id });
-      if (res.data?.file_url) {
-        window.open(res.data.file_url, '_blank');
-        toast.success('PDF generated');
+      const fileUrl = res.data?.file_url;
+      if (!fileUrl) {
+        toast.error('Failed to generate PDF');
+        return;
+      }
+      // Download the generated PDF as a blob rather than window.open(), which
+      // browsers block when called after an await (no active user gesture).
+      try {
+        const pdfRes = await fetch(fileUrl);
+        if (!pdfRes.ok) throw new Error('fetch failed');
+        const blob = await pdfRes.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${(report?.project || 'report').replace(/[^\w.-]+/g, '_')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        toast.success('PDF downloaded');
+      } catch {
+        // Fallback: if the blob fetch fails (e.g. CORS), open the URL directly.
+        window.open(fileUrl, '_blank');
       }
     } catch (e) {
       toast.error('Failed to generate PDF');
