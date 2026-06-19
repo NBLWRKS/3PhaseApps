@@ -97,7 +97,10 @@ router.post('/generatePdf', authRequired, async (req, res) => {
       doc.moveDown(0.4);
     }
 
-    for (const imgUrl of block.images || []) {
+    for (const imgItem of block.images || []) {
+      // Photos may be plain URL strings (legacy) or { url, caption } objects.
+      const imgUrl = typeof imgItem === 'string' ? imgItem : imgItem.url;
+      const caption = typeof imgItem === 'string' ? '' : (imgItem.caption || '');
       const buf = await loadImageBuffer(imgUrl);
       if (!buf) continue;
       const maxH = 280;
@@ -116,7 +119,14 @@ router.post('/generatePdf', authRequired, async (req, res) => {
         const x = margin + (contentW - drawW) / 2; // center horizontally
         const y = doc.y;
         doc.image(img, x, y, { width: drawW, height: drawH });
-        doc.y = y + drawH + 10; // advance past the image + a small gap
+        doc.y = y + drawH + 4;
+        if (caption) {
+          doc.fontSize(9).fillColor('#555').font('Helvetica-Oblique')
+            .text(caption, margin, doc.y, { width: contentW, align: 'center' });
+          doc.fillColor('#000').font('Helvetica');
+          doc.y += 2;
+        }
+        doc.y += 6; // gap before next image
       } catch {
         /* skip unsupported image formats (pdfkit supports JPEG/PNG) */
       }

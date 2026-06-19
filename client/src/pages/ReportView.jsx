@@ -51,7 +51,7 @@ export default function ReportView() {
 
   const handleSaveAllPhotos = async () => {
     const allImages = (report.blocks || []).flatMap((b, bIdx) =>
-      (b.images || []).map((url, iIdx) => ({ url, name: `${report.project || 'report'}-section${bIdx + 1}-photo${iIdx + 1}.jpg` }))
+      (b.images || []).map((img, iIdx) => ({ url: typeof img === 'string' ? img : img.url, name: `${report.project || 'report'}-section${bIdx + 1}-photo${iIdx + 1}.jpg` }))
     );
     if (!allImages.length) {
       toast.error('No photos in this report');
@@ -335,15 +335,24 @@ export default function ReportView() {
             )}
             {block.images?.length > 0 && (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {block.images.map((url, imgIdx) => (
-                  <a key={imgIdx} href={url} target="_blank" rel="noopener noreferrer" className="block">
-                    <img
-                      src={url}
-                      alt={`Section ${idx + 1} photo ${imgIdx + 1}`}
-                      className="w-full h-40 object-cover rounded-lg border border-border hover:opacity-90 transition-opacity"
-                    />
-                  </a>
-                ))}
+                {block.images.map((img, imgIdx) => {
+                  const url = typeof img === 'string' ? img : img.url;
+                  const caption = typeof img === 'string' ? '' : (img.caption || '');
+                  return (
+                    <div key={imgIdx} className="space-y-1">
+                      <a href={url} target="_blank" rel="noopener noreferrer" className="block">
+                        <img
+                          src={url}
+                          alt={caption || `Section ${idx + 1} photo ${imgIdx + 1}`}
+                          className="w-full h-40 object-cover rounded-lg border border-border hover:opacity-90 transition-opacity"
+                        />
+                      </a>
+                      {caption && (
+                        <p className="text-xs text-muted-foreground leading-snug">{caption}</p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </CardContent>

@@ -12,25 +12,44 @@ export default function ReportBlock({ block, index, onUpdate, onRemove, canRemov
 
   const [uploading, setUploading] = React.useState(false);
 
+  // Photos may be stored as plain URL strings (legacy) or as { url, caption }
+  // objects (new, with per-photo descriptions). Normalize so the rest of the
+  // component can always treat them as objects.
+  const photos = (block.images || []).map((img) =>
+    typeof img === 'string' ? { url: img, caption: '' } : { url: img.url, caption: img.caption || '' }
+  );
+
   const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
     setUploading(true);
     try {
-      const results = await Promise.all(
-        files.map(async (file) => {
-          try {
-            const { file_url } = await base44.integrations.Core.UploadFile({ file });
-            return file_url || null;
-          } catch (err) {
-            return null;
-          }
-        })
-      );
-      const urls = results.filter(Boolean);
-      const failed = results.length - urls.length;
-      if (urls.length) {
-        onUpdate('images', [...(block.images || []), ...urls]);
+      // Upload in small batches rather than all at once. Firing dozens of
+      // simultaneous uploads (especially large phone photos on mobile data)
+      // can overwhelm the connection and cause some to silently fail — which
+      // looked like a "max photos" limit. Batching makes large sets reliable.
+      const BATCH = 3;
+      const newPhotos = [];
+      let failed = 0;
+      for (let i = 0; i < files.length; i += BATCH) {
+        const slice = files.slice(i, i + BATCH);
+        const results = await Promise.all(
+          slice.map(async (file) => {
+            try {
+              const { file_url } = await base44.integrations.Core.UploadFile({ file });
+              return file_url || null;
+            } catch (err) {
+              return null;
+            }
+          })
+        );
+        for (const url of results) {
+          if (url) newPhotos.push({ url, caption: '' });
+          else failed++;
+        }
+      }
+      if (newPhotos.length) {
+        onUpdate('images', [...photos, ...newPhotos]);
       }
       if (failed > 0) {
         toast.error(
@@ -44,8 +63,13 @@ export default function ReportBlock({ block, index, onUpdate, onRemove, canRemov
   };
 
   const removeImage = (idx) => {
-    const imgs = [...(block.images || [])];
+    const imgs = [...photos];
     imgs.splice(idx, 1);
+    onUpdate('images', imgs);
+  };
+
+  const setCaption = (idx, caption) => {
+    const imgs = photos.map((p, i) => (i === idx ? { ...p, caption } : p));
     onUpdate('images', imgs);
   };
 
@@ -80,16 +104,24 @@ export default function ReportBlock({ block, index, onUpdate, onRemove, canRemov
 
         {/* Images */}
         <div className="space-y-3">
-          <div className="flex flex-wrap gap-3">
-            {(block.images || []).map((url, idx) => (
-              <div key={idx} className="relative group w-28 h-28 rounded-lg overflow-hidden border border-border">
-                <img src={url} alt="" className="w-full h-full object-cover" />
-                <button
-                  onClick={() => removeImage(idx)}
-                  className="absolute top-1 right-1 w-6 h-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <X className="w-3 h-3" />
-                </button>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {photos.map((photo, idx) => (
+              <div key={idx} className="rounded-lg border border-border overflow-hidden bg-card">
+                <div className="relative group aspect-square">
+                  <img src={photo.url} alt="" className="w-full h-full object-cover" />
+                  <button
+                    onClick={() => removeImage(idx)}
+                    className="absolute top-1 right-1 w-6 h-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+                <Input
+                  value={photo.caption}
+                  onChange={(e) => setCaption(idx, e.target.value)}
+                  placeholder="Add a description…"
+                  className="border-0 border-t border-border rounded-none text-xs h-8 focus-visible:ring-0"
+                />
               </div>
             ))}
 
@@ -97,7 +129,7 @@ export default function ReportBlock({ block, index, onUpdate, onRemove, canRemov
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="w-28 h-28 rounded-lg border-2 border-dashed border-border hover:border-primary flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-primary transition-colors disabled:opacity-60"
+              className="aspect-square rounded-lg border-2 border-dashed border-border hover:border-primary flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-primary transition-colors disabled:opacity-60"
             >
               {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
               <span className="text-xs font-medium">{uploading ? 'Uploading…' : 'Add Photos'}</span>
