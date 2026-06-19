@@ -20,7 +20,6 @@ export default function ReportView() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [exporting, setExporting] = useState(false);
-  const [translating, setTranslating] = useState(false);
   const [savingPhotos, setSavingPhotos] = useState(false);
   const { user } = useAuth();
 
@@ -40,17 +39,14 @@ export default function ReportView() {
     },
   });
 
-  const handleTranslate = async () => {
-    setTranslating(true);
-    try {
-      await base44.functions.invoke('translateReport', { reportId: id });
-      await queryClient.invalidateQueries({ queryKey: ['report', id] });
-      toast.success('Report translated to English');
-    } catch (e) {
-      toast.error('Failed to translate report');
-    } finally {
-      setTranslating(false);
-    }
+  const [showTranslateTip, setShowTranslateTip] = useState(false);
+
+  // Browser-based translation is free and needs no API. We just guide the
+  // reader to their browser's built-in "Translate page" feature. The report
+  // content is marked lang="es" so Chrome/Edge/Safari detect Spanish and offer
+  // to translate automatically; this button surfaces that for discoverability.
+  const handleTranslate = () => {
+    setShowTranslateTip(true);
   };
 
   const handleSaveAllPhotos = async () => {
@@ -134,12 +130,10 @@ export default function ReportView() {
           Back
         </button>
         <div className="flex items-center gap-2 flex-wrap">
-          {isAdmin && (
-            <Button variant="outline" onClick={handleTranslate} disabled={translating} className="gap-2">
-              {translating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Languages className="w-4 h-4" />}
-              Translate to English
-            </Button>
-          )}
+          <Button variant="outline" onClick={handleTranslate} className="gap-2">
+            <Languages className="w-4 h-4" />
+            Translate
+          </Button>
           {isAdmin && (
             <Button variant="outline" onClick={handleSaveAllPhotos} disabled={savingPhotos} className="gap-2">
               {savingPhotos ? <Loader2 className="w-4 h-4 animate-spin" /> : <Images className="w-4 h-4" />}
@@ -179,8 +173,32 @@ export default function ReportView() {
         </div>
       </div>
 
+      {showTranslateTip && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 text-sm">
+          <div className="flex items-start justify-between gap-3">
+            <div className="space-y-1">
+              <p className="font-medium text-foreground">Translate this report with your browser</p>
+              <p className="text-muted-foreground">
+                Your browser can translate this page into your language for free:
+              </p>
+              <ul className="text-muted-foreground list-disc pl-5 space-y-0.5">
+                <li><span className="font-medium">Chrome / Edge:</span> right-click the page and choose “Translate to…”, or tap the translate icon in the address bar.</li>
+                <li><span className="font-medium">Safari (iPhone/Mac):</span> tap the <span className="font-medium">aA</span> / translate icon in the address bar and choose “Translate.”</li>
+                <li><span className="font-medium">Android Chrome:</span> tap the ⋮ menu, then “Translate.”</li>
+              </ul>
+            </div>
+            <button
+              onClick={() => setShowTranslateTip(false)}
+              className="text-muted-foreground hover:text-foreground text-xs font-medium shrink-0"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Report header */}
-      <Card>
+      <Card lang="es">
         <div className="h-1 bg-gradient-to-r from-destructive via-primary to-accent" />
         <CardContent className="p-6">
           <div className="flex items-start justify-between mb-4">
@@ -249,7 +267,7 @@ export default function ReportView() {
 
       {/* Sections */}
       {(report.blocks || []).map((block, idx) => (
-        <Card key={idx} className="border-l-4 border-l-primary">
+        <Card key={idx} lang="es" className="border-l-4 border-l-primary">
           <CardContent className="p-6">
             <div className="flex items-center gap-3 mb-3">
               <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary text-primary-foreground text-sm font-bold shrink-0">
