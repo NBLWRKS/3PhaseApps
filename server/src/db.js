@@ -84,5 +84,6 @@ ensureColumn('highlights', 'updated_by', 'TEXT');
 ensureColumn('highlights', 'pages', "TEXT NOT NULL DEFAULT '[]'");
 ensureColumn('highlights', 'project', 'TEXT');
 ensureColumn('highlights', 'team', 'TEXT');
+ensureColumn('highlights', 'legend', "TEXT NOT NULL DEFAULT '{}'");
 
 export default db;

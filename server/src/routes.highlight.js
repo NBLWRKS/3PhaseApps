@@ -32,6 +32,7 @@ function rowToDoc(row) {
     ...row,
     regions: JSON.parse(row.regions || '[]'),
     pages: JSON.parse(row.pages || '[]'),
+    legend: JSON.parse(row.legend || '{}'),
   };
 }
 
@@ -124,8 +125,8 @@ router.post('/', appEditRequired('highlight'), (req, res) => {
   const id = nanoid();
   const ts = now();
   db.prepare(
-    `INSERT INTO highlights (id, title, project, team, image_url, image_width, image_height, regions, pages, created_by, updated_by, created_date, updated_date)
-     VALUES (@id, @title, @project, @team, @image_url, @image_width, @image_height, @regions, @pages, @created_by, @updated_by, @created_date, @updated_date)`
+    `INSERT INTO highlights (id, title, project, team, image_url, image_width, image_height, regions, pages, legend, created_by, updated_by, created_date, updated_date)
+     VALUES (@id, @title, @project, @team, @image_url, @image_width, @image_height, @regions, @pages, @legend, @created_by, @updated_by, @created_date, @updated_date)`
   ).run({
     id,
     title: data.title || 'Untitled',
@@ -136,6 +137,7 @@ router.post('/', appEditRequired('highlight'), (req, res) => {
     image_height: data.image_height ?? null,
     regions: JSON.stringify(data.regions ?? []),
     pages: JSON.stringify(data.pages ?? []),
+    legend: JSON.stringify(data.legend ?? {}),
     created_by: req.user.email,
     updated_by: req.user.email,
     created_date: ts,
@@ -161,13 +163,14 @@ router.put('/:id', appEditRequired('highlight'), (req, res) => {
     image_height: pick('image_height'),
     regions: data.regions !== undefined ? JSON.stringify(data.regions) : existing.regions,
     pages: data.pages !== undefined ? JSON.stringify(data.pages) : existing.pages,
+    legend: data.legend !== undefined ? JSON.stringify(data.legend) : existing.legend,
     updated_by: req.user.email,
     updated_date: now(),
     id: req.params.id,
   };
   db.prepare(
     `UPDATE highlights SET title=@title, project=@project, team=@team, image_url=@image_url, image_width=@image_width,
-       image_height=@image_height, regions=@regions, pages=@pages, updated_by=@updated_by, updated_date=@updated_date WHERE id=@id`
+       image_height=@image_height, regions=@regions, pages=@pages, legend=@legend, updated_by=@updated_by, updated_date=@updated_date WHERE id=@id`
   ).run(merged);
   res.json(rowToDoc(db.prepare('SELECT * FROM highlights WHERE id = ?').get(req.params.id)));
 });

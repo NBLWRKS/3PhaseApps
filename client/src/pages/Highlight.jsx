@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  ArrowLeft, Upload, Loader2, Trash2, Save, Highlighter, Plus, FolderOpen, X, Zap, Wrench, Download,
+  ArrowLeft, Upload, Loader2, Trash2, Save, Highlighter, Plus, FolderOpen, X, Zap, Wrench, Download, RotateCw, Tag,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -21,6 +21,10 @@ const COLORS = [
   { name: 'Green', value: '#3fae46' },
   { name: 'Amber', value: '#f5a623' },
   { name: 'Purple', value: '#7b4ea0' },
+  { name: 'Orange', value: '#e8731c' },
+  { name: 'Teal', value: '#17a2a2' },
+  { name: 'Pink', value: '#e0529c' },
+  { name: 'Black', value: '#2b2b2b' },
 ];
 
 export default function Highlight() {
@@ -35,6 +39,9 @@ export default function Highlight() {
   const [pages, setPages] = useState([]);
   // regions carry a `page` index (0-based) identifying which page they're on.
   const [regions, setRegions] = useState([]);
+  const [selectedId, setSelectedId] = useState(null); // region selected for rotating
+  // Editable color-key legend: { [colorValue]: meaningText }. Saved with the doc.
+  const [legend, setLegend] = useState({});
   const [activeColor, setActiveColor] = useState(COLORS[0].value);
   const [converting, setConverting] = useState(false);
   const [progress, setProgress] = useState('');
@@ -219,6 +226,11 @@ export default function Highlight() {
   const removeRegion = (id) => setRegions((r) => r.filter((x) => x.id !== id));
   const renameRegion = (id, label) =>
     setRegions((r) => r.map((x) => (x.id === id ? { ...x, label } : x)));
+  const rotateRegion = (id, angle) =>
+    setRegions((r) => r.map((x) => (x.id === id ? { ...x, angle: Number(angle) } : x)));
+
+  // Colors actually used by regions, in palette order — drives the legend UI.
+  const usedColors = COLORS.filter((c) => regions.some((r) => r.color === c.value));
 
   const save = async () => {
     if (!hasPages) return;
@@ -235,6 +247,7 @@ export default function Highlight() {
       image_width: pages[0]?.width || 0,
       image_height: pages[0]?.height || 0,
       regions,
+      legend,
     };
     try {
       const result = docId
@@ -265,6 +278,7 @@ export default function Highlight() {
         image_width: pages[0]?.width || 0,
         image_height: pages[0]?.height || 0,
         regions,
+        legend,
       });
       toast.success('PDF exported');
     } catch (err) {
@@ -293,6 +307,8 @@ export default function Highlight() {
       }
       // Older regions have no `page`; default them to page 0.
       setRegions((doc.regions || []).map((r) => ({ ...r, page: r.page ?? 0 })));
+      setLegend(doc.legend && typeof doc.legend === 'object' ? doc.legend : {});
+      setSelectedId(null);
       setShowLibrary(false);
     } catch (err) {
       toast.error('Failed to open document');
@@ -320,6 +336,8 @@ export default function Highlight() {
     pageImgRefs.current = [];
     setPages([]);
     setRegions([]);
+    setLegend({});
+    setSelectedId(null);
   };
 
   return (
@@ -517,6 +535,7 @@ export default function Highlight() {
                           <div
                             key={r.id}
                             className="absolute group"
+                            onPointerDown={(e) => { if (!readOnly) { e.stopPropagation(); setSelectedId(r.id); } }}
                             style={{
                               left: r.x * scale,
                               top: r.y * scale,
@@ -524,6 +543,11 @@ export default function Highlight() {
                               height: r.h * scale,
                               backgroundColor: r.color + '40',
                               border: `2px solid ${r.color}`,
+                              transform: r.angle ? `rotate(${r.angle}deg)` : undefined,
+                              transformOrigin: 'center center',
+                              outline: selectedId === r.id ? '2px dashed #111' : undefined,
+                              outlineOffset: 2,
+                              cursor: readOnly ? 'default' : 'pointer',
                             }}
                           >
                             {r.label ? (
@@ -591,28 +615,77 @@ export default function Highlight() {
                 ) : (
                   <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                     {regions.map((r) => (
-                      <div key={r.id} className="flex items-center gap-2 bg-card border border-border rounded-lg p-2">
-                        <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: r.color }} />
-                        <input
-                          value={r.label}
-                          onChange={(e) => renameRegion(r.id, e.target.value)}
-                          placeholder={readOnly ? '(no label)' : 'Optional label'}
-                          readOnly={readOnly}
-                          className="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
-                        />
-                        {pages.length > 1 && (
-                          <span className="text-[10px] text-muted-foreground flex-shrink-0">p{(r.page ?? 0) + 1}</span>
-                        )}
+                      <div
+                        key={r.id}
+                        className={`bg-card border rounded-lg p-2 ${selectedId === r.id ? 'border-foreground' : 'border-border'}`}
+                        onPointerDown={() => setSelectedId(r.id)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: r.color }} />
+                          <input
+                            value={r.label}
+                            onChange={(e) => renameRegion(r.id, e.target.value)}
+                            placeholder={readOnly ? '(no label)' : 'Optional label'}
+                            readOnly={readOnly}
+                            className="flex-1 min-w-0 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+                          />
+                          {pages.length > 1 && (
+                            <span className="text-[10px] text-muted-foreground flex-shrink-0">p{(r.page ?? 0) + 1}</span>
+                          )}
+                          {!readOnly && (
+                            <button onClick={() => removeRegion(r.id)} className="text-muted-foreground hover:text-destructive">
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                         {!readOnly && (
-                          <button onClick={() => removeRegion(r.id)} className="text-muted-foreground hover:text-destructive">
-                            <X className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-2 mt-1.5 pl-5">
+                            <RotateCw className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                            <input
+                              type="range"
+                              min="-90"
+                              max="90"
+                              step="1"
+                              value={r.angle || 0}
+                              onChange={(e) => rotateRegion(r.id, e.target.value)}
+                              className="flex-1 h-1 accent-primary"
+                            />
+                            <span className="text-[10px] text-muted-foreground tabular-nums w-9 text-right flex-shrink-0">{r.angle || 0}°</span>
+                            {r.angle ? (
+                              <button onClick={() => rotateRegion(r.id, 0)} className="text-[10px] text-muted-foreground hover:text-foreground underline flex-shrink-0">0</button>
+                            ) : null}
+                          </div>
                         )}
                       </div>
                     ))}
                   </div>
                 )}
               </div>
+
+              {/* Color key legend — type a meaning for each color in use */}
+              {usedColors.length > 0 && (
+                <div className="pt-3 border-t border-border">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Tag className="w-3.5 h-3.5 text-muted-foreground" />
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Color key</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    {usedColors.map((c) => (
+                      <div key={c.value} className="flex items-center gap-2">
+                        <span className="w-4 h-4 rounded flex-shrink-0 border border-border" style={{ backgroundColor: c.value }} />
+                        <input
+                          value={legend[c.value] || ''}
+                          onChange={(e) => setLegend((l) => ({ ...l, [c.value]: e.target.value }))}
+                          readOnly={readOnly}
+                          placeholder={`What does ${c.name.toLowerCase()} mean?`}
+                          className="flex-1 min-w-0 bg-card border border-border rounded px-2 py-1 text-xs outline-none focus:border-primary placeholder:text-muted-foreground/60"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1.5">This key appears on the exported PDF.</p>
+                </div>
+              )}
 
               <div className="flex flex-col gap-2 pt-2 border-t border-border">
                 {readOnly && (

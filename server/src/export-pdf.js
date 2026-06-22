@@ -165,18 +165,50 @@ export async function buildHighlightPdf(docRow) {
       const w = r.w * scale;
       const h = r.h * scale;
       const color = r.color || '#e0211b';
+      const angle = Number(r.angle) || 0;
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+
       doc.save();
+      if (angle) doc.rotate(angle, { origin: [cx, cy] }); // rotate about the rect center
       doc.rect(x, y, w, h).fillOpacity(0.25).fill(color);
-      doc.restore();
-      doc.save();
       doc.fillOpacity(1).lineWidth(1.5).strokeColor(color).rect(x, y, w, h).stroke();
       doc.restore();
+
       if (r.label) {
+        // Label stays upright at the (unrotated) top-left for legibility.
         doc.save();
         doc.fillOpacity(1).fillColor(color).fontSize(8).font('Helvetica-Bold')
           .text(r.label, x, Math.max(offY, y - 10), { lineBreak: false });
         doc.restore();
       }
+    }
+  }
+
+  // ---- Color key legend ----
+  const legend = docRow.legend && typeof docRow.legend === 'object' ? docRow.legend : {};
+  // Only colors that are actually used AND have a meaning typed in.
+  const usedColors = [...new Set(regions.map((r) => r.color).filter(Boolean))];
+  const legendEntries = usedColors
+    .map((color) => ({ color, text: legend[color] }))
+    .filter((e) => e.text && String(e.text).trim());
+
+  if (legendEntries.length) {
+    doc.addPage();
+    doc.fillColor('#2b2b2b').fontSize(16).font('Helvetica-Bold').text('Color Key', 24, 28);
+    doc.moveDown(0.6);
+    const swatch = 14;
+    const rowH = 24;
+    let ly = doc.y;
+    for (const { color, text } of legendEntries) {
+      doc.save();
+      doc.rect(24, ly, swatch, swatch).fillOpacity(1).fill(color);
+      doc.lineWidth(0.75).strokeColor('#888').rect(24, ly, swatch, swatch).stroke();
+      doc.restore();
+      doc.fillColor('#2b2b2b').fontSize(11).font('Helvetica')
+        .text(String(text), 24 + swatch + 10, ly + 2, { width: doc.page.width - 24 - swatch - 10 - 24 });
+      ly += rowH;
+      if (ly > doc.page.height - 40) { doc.addPage(); ly = 40; }
     }
   }
 
