@@ -10,9 +10,13 @@ export const APPS = [
 export const APP_KEYS = APPS.map((a) => a.key);
 
 // Valid permission levels, lowest to highest. 'edit' implies 'read'.
-export const LEVELS = ['read', 'edit'];
+// Permission levels, lowest to highest. 'supervisor' is currently only
+// meaningful for Reports (view + edit everyone's reports), but is stored the
+// same way as any level. Each level implies all lower levels.
+export const LEVELS = ['read', 'edit', 'supervisor'];
+const LEVEL_RANK = { read: 1, edit: 2, supervisor: 3 };
 
-// Normalize stored permissions into a canonical object: { [appKey]: 'read'|'edit' }.
+// Normalize stored permissions into a canonical object: { [appKey]: level }.
 // Accepts both the NEW object format and the LEGACY array format:
 //   - Legacy array ['reports','highlight']  -> { reports:'edit', highlight:'edit' }
 //     (in the old model, having the app key meant full access)
@@ -40,12 +44,10 @@ export function sanitizePermissions(input) {
   return normalizePermissions(input);
 }
 
-// Does `perms` grant at least `needed` ('read' or 'edit') for `appKey`?
-// 'edit' satisfies a 'read' requirement; 'read' does not satisfy 'edit'.
+// Does `perms` grant at least `needed` for `appKey`? Higher levels satisfy
+// lower requirements (supervisor >= edit >= read).
 export function hasAppLevel(perms, appKey, needed) {
   const have = perms ? perms[appKey] : undefined;
-  if (!have) return false;
-  if (needed === 'read') return have === 'read' || have === 'edit';
-  if (needed === 'edit') return have === 'edit';
-  return false;
+  if (!have || !LEVEL_RANK[have]) return false;
+  return LEVEL_RANK[have] >= (LEVEL_RANK[needed] || 0);
 }

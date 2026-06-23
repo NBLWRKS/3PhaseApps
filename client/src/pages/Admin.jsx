@@ -183,15 +183,19 @@ export default function Admin() {
                         <div className="space-y-3">
                           {apps.map((app) => {
                             const level = (u.app_permissions && u.app_permissions[app.key]) || 'none';
+                            // Supervisor (view + edit everyone's reports) only
+                            // applies to Reports, so it's offered just for that app.
+                            const levelOptions = [
+                              { value: 'none', label: 'No access' },
+                              { value: 'read', label: 'Read' },
+                              { value: 'edit', label: 'Edit' },
+                              ...(app.key === 'reports' ? [{ value: 'supervisor', label: 'Supervisor' }] : []),
+                            ];
                             return (
                               <div key={app.key} className="flex items-center justify-between gap-4">
                                 <span className="text-sm font-medium">{app.name}</span>
                                 <div className="inline-flex rounded-md border border-border overflow-hidden">
-                                  {[
-                                    { value: 'none', label: 'No access' },
-                                    { value: 'read', label: 'Read' },
-                                    { value: 'edit', label: 'Edit' },
-                                  ].map((opt) => (
+                                  {levelOptions.map((opt) => (
                                     <button
                                       key={opt.value}
                                       onClick={() => setAppLevel(u, app.key, opt.value)}

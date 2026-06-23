@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
-import { canEdit } from '@/lib/permissions';
+import { canEdit, canSupervise } from '@/lib/permissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -29,11 +29,13 @@ export default function Dashboard() {
 
   const isAdmin = user?.role === 'admin';
   const canEditReports = canEdit(user, 'reports');
+  // Admins and Reports supervisors see everyone's reports; others see only theirs.
+  const seesAllReports = isAdmin || canSupervise(user, 'reports');
 
   const { data: reports = [], isLoading, refetch } = useQuery({
-    queryKey: ['reports', user?.email, isAdmin],
+    queryKey: ['reports', user?.email, seesAllReports],
     queryFn: () =>
-      isAdmin
+      seesAllReports
         ? base44.entities.Report.list('-created_date', 100)
         : base44.entities.Report.filter({ created_by: user?.email }, '-created_date', 100),
     enabled: !!user,
@@ -117,7 +119,7 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Reports</h1>
           <p className="text-muted-foreground mt-1">
-            {isAdmin ? 'All reports — Admin view' : 'Your field inspection reports'}
+            {seesAllReports ? 'All reports — team view' : 'Your field inspection reports'}
           </p>
         </div>
         <Dialog open={typeDialogOpen} onOpenChange={setTypeDialogOpen}>

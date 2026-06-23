@@ -5,6 +5,7 @@ import { base44 } from '@/api/base44Client';
 import { renderPdfAllPages } from '@/lib/pdf-render';
 import { canRead, canEdit } from '@/lib/permissions';
 import logo from '@/assets/logo.jpg';
+import AppSwitcher from '@/components/layout/AppSwitcher';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -356,10 +357,7 @@ export default function Highlight() {
               <FolderOpen className="w-4 h-4" />
               <span className="hidden sm:inline">Library</span>
             </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate('/')} className="gap-2">
-              <ArrowLeft className="w-4 h-4" />
-              <span className="hidden sm:inline">Apps</span>
-            </Button>
+            <AppSwitcher currentKey="highlight" />
           </div>
         </div>
       </header>

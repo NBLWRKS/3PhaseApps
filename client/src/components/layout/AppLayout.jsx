@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/AuthContext';
 import logo from '@/assets/logo.jpg';
 import BottomTabBar from './BottomTabBar';
 import PageTransition from './PageTransition';
+import AppSwitcher from './AppSwitcher';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', path: '/reports', icon: LayoutDashboard },
@@ -62,6 +63,7 @@ export default function AppLayout() {
                 <span>Admin</span>
               </Link>
             )}
+            <AppSwitcher currentKey="reports" />
             <button
               onClick={() => base44.auth.logout()}
               className="ml-2 p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
@@ -75,7 +77,7 @@ export default function AppLayout() {
 
       {/* Mobile top bar (logo only) — visible on mobile */}
       <header
-        className="sticky top-0 z-40 bg-card border-b border-border flex items-center px-4 h-14 sm:hidden"
+        className="sticky top-0 z-40 bg-card border-b border-border flex items-center justify-between px-4 h-14 sm:hidden"
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         <Link to="/reports" className="flex items-center gap-2">
@@ -84,6 +86,7 @@ export default function AppLayout() {
             Reports
           </span>
         </Link>
+        <AppSwitcher currentKey="reports" />
       </header>
 
       {/* Main content — extra bottom padding on mobile for tab bar */}

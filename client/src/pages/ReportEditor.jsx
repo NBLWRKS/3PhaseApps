@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
-import { canEdit } from '@/lib/permissions';
+import { canEdit, canSupervise } from '@/lib/permissions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -123,7 +123,7 @@ export default function ReportEditor() {
   }
 
   // Non-admins can only edit their own reports
-  if (!isNew && existingReport && !isAdmin && existingReport.created_by !== user?.email) {
+  if (!isNew && existingReport && !isAdmin && !canSupervise(user, 'reports') && existingReport.created_by !== user?.email) {
     return (
       <div className="text-center py-20">
         <p className="text-muted-foreground">You don't have permission to edit this report.</p>
