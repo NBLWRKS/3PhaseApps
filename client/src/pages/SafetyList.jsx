@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { canRead, canEdit } from '@/lib/permissions';
 import { Navigate } from 'react-router-dom';
-import { Search, Plus, ShieldCheck, ChevronRight, Loader2 } from 'lucide-react';
+import { Search, Plus, ShieldCheck, ChevronRight, Loader2, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.jpg';
 import AppSwitcher from '@/components/layout/AppSwitcher';
@@ -71,9 +71,17 @@ export default function SafetyList() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-6">
-        <div className="flex items-center gap-2 mb-5">
-          <ShieldCheck className="w-6 h-6 text-primary" />
-          <h1 className="text-2xl font-bold">Employee Safety Credentials</h1>
+        <div className="flex items-center justify-between gap-2 mb-5">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-6 h-6 text-primary" />
+            <h1 className="text-2xl font-bold">Employee Safety Credentials</h1>
+          </div>
+          <button
+            onClick={() => navigate('/safety/training-types')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-secondary"
+          >
+            <Tag className="w-4 h-4" /> <span className="hidden sm:inline">Training types</span>
+          </button>
         </div>
 
         <div className="flex items-center gap-2 mb-4">

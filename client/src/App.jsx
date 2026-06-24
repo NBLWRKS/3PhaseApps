@@ -19,6 +19,7 @@ import Highlight from '@/pages/Highlight';
 import SafetyList from '@/pages/SafetyList';
 import SafetyEmployee from '@/pages/SafetyEmployee';
 import SafetyCard from '@/pages/SafetyCard';
+import SafetyTrainingTypes from '@/pages/SafetyTrainingTypes';
 import Dashboard from '@/pages/Dashboard';
 import ReportEditor from '@/pages/ReportEditor';
 import ReportView from '@/pages/ReportView';
@@ -66,6 +67,7 @@ const AuthenticatedApp = () => {
       <Route path="/highlight" element={<Highlight />} />
       <Route path="/Highlight" element={<Navigate to="/highlight" replace />} />
       <Route path="/safety" element={<SafetyList />} />
+      <Route path="/safety/training-types" element={<SafetyTrainingTypes />} />
       <Route path="/safety/:slug" element={<SafetyEmployee />} />
       {/* PUBLIC, no-login credential card at the shareable spec URL:
           e.g. /SafetyCredentials/DayanaAballay */}
