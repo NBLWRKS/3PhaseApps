@@ -108,7 +108,7 @@ export default function ReportBlock({ block, index, onUpdate, onRemove, canRemov
             {photos.map((photo, idx) => (
               <div key={idx} className="rounded-lg border border-border overflow-hidden bg-card">
                 <div className="relative group aspect-square">
-                  <img src={photo.url} alt="" className="w-full h-full object-cover" />
+                  <img src={photo.url} alt="" className="w-full h-full object-contain bg-muted" />
                   <button
                     onClick={() => removeImage(idx)}
                     className="absolute top-1 right-1 w-6 h-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"

@@ -344,7 +344,7 @@ export default function ReportView() {
                         <img
                           src={url}
                           alt={caption || `Section ${idx + 1} photo ${imgIdx + 1}`}
-                          className="w-full h-40 object-cover rounded-lg border border-border hover:opacity-90 transition-opacity"
+                          className="w-full h-40 object-contain bg-muted rounded-lg border border-border hover:opacity-90 transition-opacity"
                         />
                       </a>
                       {caption && (
