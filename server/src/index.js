@@ -9,6 +9,7 @@ import uploadRoutes, { uploadDir } from './routes.uploads.js';
 import functionRoutes from './routes.functions.js';
 import adminRoutes from './routes.admin.js';
 import highlightRoutes from './routes.highlight.js';
+import safetyRoutes from './routes.safety.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -38,6 +39,7 @@ app.use('/api/integrations', uploadRoutes);
 app.use('/api/functions', functionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/highlight', highlightRoutes);
+app.use('/api/safety', safetyRoutes);
 
 // Public app settings endpoint (frontend AuthContext probes this).
 // Auth here is "required" so the app gates behind login.

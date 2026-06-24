@@ -8,6 +8,7 @@ import { canRead } from '@/lib/permissions';
 const APPS = [
   { key: 'reports', name: 'Reports', path: '/reports' },
   { key: 'highlight', name: 'Highlight', path: '/highlight' },
+  { key: 'safety', name: 'Safety Credentials', path: '/safety' },
 ];
 
 // A compact dropdown that lets the user jump to another application they have

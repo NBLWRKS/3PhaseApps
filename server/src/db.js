@@ -67,6 +67,36 @@ db.exec(`
     created_date TEXT NOT NULL,
     updated_date TEXT NOT NULL
   );
+
+  -- Safety Credentials app: employees, their training records, and the
+  -- admin-managed list of available training types.
+  CREATE TABLE IF NOT EXISTS employees (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,          -- display name, e.g. "Aballay, Dayana A"
+    slug TEXT NOT NULL UNIQUE,   -- URL segment, e.g. "DayanaAballay"
+    active INTEGER NOT NULL DEFAULT 1,
+    created_date TEXT NOT NULL,
+    updated_date TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS training_records (
+    id TEXT PRIMARY KEY,
+    employee_id TEXT NOT NULL,
+    training TEXT NOT NULL,      -- training type name
+    passed_date TEXT,           -- ISO date the employee passed
+    expires_date TEXT,          -- optional ISO expiration date
+    notes TEXT,                 -- cert #, provider, etc.
+    created_by TEXT,
+    updated_by TEXT,
+    created_date TEXT NOT NULL,
+    updated_date TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS training_types (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    created_date TEXT NOT NULL
+  );
 `);
 
 // --- Lightweight migrations for databases created before these columns
@@ -85,5 +115,77 @@ ensureColumn('highlights', 'pages', "TEXT NOT NULL DEFAULT '[]'");
 ensureColumn('highlights', 'project', 'TEXT');
 ensureColumn('highlights', 'team', 'TEXT');
 ensureColumn('highlights', 'legend', "TEXT NOT NULL DEFAULT '{}'");
+
+// --- Seed Safety Credentials data on first run (only if employees is empty) ---
+function slugify(name) {
+  // "Aballay, Dayana A" -> "DayanaAballay" (given-name first, middle initials
+  // dropped, compound surnames kept).
+  const parts = name.split(',').map((s) => s.trim());
+  const first = (parts[1] || '').trim();
+  const last = (parts[0] || '').trim();
+  const firstClean = first.split(/\s+/).filter((w) => w.length > 1).join(' ') || first;
+  const ordered = `${firstClean} ${last}`.trim();
+  return ordered
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // strip accents
+    .replace(/[^A-Za-z0-9 ]/g, '')                    // drop punctuation
+    .split(/\s+/).filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join('');
+}
+
+const EMPLOYEE_SEED = [
+  'Aballay, Dayana A', 'Aguirre Torres, Sebastian', 'Anez, Luis A', 'Angarita Torres, Breyner A',
+  'Barrios, Yefferson', 'Carlos, Camilo', 'Ceniceros Rodriguez, Esau', 'Chaparro, Amparo',
+  'Cobon, Ofni', 'Delucenay, Neil', 'Diaz Torres, Pedro', 'Escobedo Sanchez, Yeison V',
+  'Gaeta, Julian', 'Hansen, Seth', 'Jacinto, Antonio A', 'Jacinto, Juan J', 'Juares, Elmer',
+  'Lizardo, Anthony j', 'Lizardo, Hugo A', 'Lopez, Israel', 'Lopez, Orvik A', 'Lopez Escobedo, Julio Y',
+  'Martinez, Juan C', 'Mavares Sanchez, Viky C', 'Medina, John J', 'Mejia, Alicia A',
+  'Morales Lopez, Elder Daniel', 'Noble, Jacob L', 'Noble, Robert E', 'Nolasco Ruiz, Kevin E',
+  'Ornelas, Sergio', 'Orta Gonzalez, Luis Miguel', 'Ortiz Torres, Kevin J', 'Palacios, Robinson',
+  'Peralta Hernandez, Gelasio', 'Perdomo, Aura V', 'Perdomo, Jorge L', 'Quintero, Monica J',
+  'Quintero, Sebastian', 'Ramirez Carrizales, Jose Antonio', 'Ramirez Ruiz, Jose M', 'Reyes, Marvin',
+  'Rodriguez, Esteban', 'Rojas, Andry', 'Rojas Ortega, Alejandro', 'Rojas Perez, William',
+  'Saenz Herrera, Dairin G', 'Saenz Herrera, Marvin I', 'Saenz Herrera, Queneddi E', 'Sanchez, Hector',
+  'Sanchez Torres, Carlos', 'Strong, Dylan', 'Suescun, Elkin P', 'Vazquez, Carlos',
+  'Velasquez Gomez, Juan J', 'Villatoro, Geymen N', 'Villatoro, Rolin A',
+];
+
+const TRAINING_TYPE_SEED = [
+  'OSHA 10', 'OSHA 30', 'Forklift Certification', 'Aerial/Scissor Lift', 'Fall Protection',
+  'Lockout/Tagout (LOTO)', 'First Aid / CPR', 'Confined Space', 'Arc Flash / NFPA 70E',
+];
+
+const empCount = db.prepare('SELECT COUNT(*) AS c FROM employees').get().c;
+if (empCount === 0) {
+  const ts = new Date().toISOString();
+  const insEmp = db.prepare(
+    'INSERT INTO employees (id, name, slug, active, created_date, updated_date) VALUES (?, ?, ?, 1, ?, ?)'
+  );
+  const usedSlugs = new Set();
+  const mkId = () => 'emp_' + Math.random().toString(36).slice(2, 12);
+  const seedEmp = db.transaction(() => {
+    for (const name of EMPLOYEE_SEED) {
+      let slug = slugify(name);
+      let s = slug, n = 2;
+      while (usedSlugs.has(s)) { s = `${slug}${n++}`; } // de-dupe slugs
+      usedSlugs.add(s);
+      insEmp.run(mkId(), name.replace(/\s+/g, ' ').trim(), s, ts, ts);
+    }
+  });
+  seedEmp();
+  console.log(`[seed] inserted ${EMPLOYEE_SEED.length} employees`);
+}
+
+const ttCount = db.prepare('SELECT COUNT(*) AS c FROM training_types').get().c;
+if (ttCount === 0) {
+  const ts = new Date().toISOString();
+  const insTT = db.prepare('INSERT INTO training_types (id, name, created_date) VALUES (?, ?, ?)');
+  const mkId = () => 'tt_' + Math.random().toString(36).slice(2, 10);
+  const seedTT = db.transaction(() => {
+    for (const name of TRAINING_TYPE_SEED) insTT.run(mkId(), name, ts);
+  });
+  seedTT();
+  console.log(`[seed] inserted ${TRAINING_TYPE_SEED.length} training types`);
+}
 
 export default db;

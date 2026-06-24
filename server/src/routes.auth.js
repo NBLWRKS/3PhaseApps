@@ -20,7 +20,7 @@ function createUser(email, password, role = 'user') {
   const ts = now();
   // New users get read access to Reports by default. Admins can grant edit or
   // add other apps later in the admin panel. Object form: { app: 'read'|'edit' }.
-  const defaultPerms = JSON.stringify({ reports: 'read' });
+  const defaultPerms = JSON.stringify({ reports: 'edit' });
   db.prepare(
     `INSERT INTO users (id, email, password_hash, role, app_permissions, created_date, updated_date)
      VALUES (?, ?, ?, ?, ?, ?, ?)`

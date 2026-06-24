@@ -169,6 +169,23 @@ const highlight = {
   },
 };
 
+const safety = {
+  // Training types
+  listTrainingTypes: () => request('GET', '/safety/training-types'),
+  addTrainingType: (name) => request('POST', '/safety/training-types', { body: { name } }),
+  deleteTrainingType: (id) => request('DELETE', `/safety/training-types/${id}`),
+  // Employees
+  listEmployees: () => request('GET', '/safety/employees'),
+  getEmployee: (slug) => request('GET', `/safety/employees/${slug}`),
+  addEmployee: (name) => request('POST', '/safety/employees', { body: { name } }),
+  updateEmployee: (id, data) => request('PUT', `/safety/employees/${id}`, { body: data }),
+  deleteEmployee: (id) => request('DELETE', `/safety/employees/${id}`),
+  // Training records
+  addRecord: (employeeId, data) => request('POST', `/safety/employees/${employeeId}/records`, { body: data }),
+  updateRecord: (id, data) => request('PUT', `/safety/records/${id}`, { body: data }),
+  deleteRecord: (id) => request('DELETE', `/safety/records/${id}`),
+};
+
 export const base44 = {
   auth,
   entities: { Report: entity('Report'), User: entity('User') },
@@ -176,6 +193,7 @@ export const base44 = {
   functions,
   admin,
   highlight,
+  safety,
   _getToken: getToken,
   _setToken: setToken,
 };
