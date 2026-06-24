@@ -121,7 +121,14 @@ export default function SafetyEmployee() {
               <ShieldCheck className="w-6 h-6 text-primary" />
               <h1 className="text-2xl font-bold">{emp.name}</h1>
             </div>
-            <p className="text-sm text-muted-foreground mb-5">Safety training records</p>
+            <a
+              href={`/SafetyCredentials/${emp.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mb-5"
+            >
+              View public credential card ↗
+            </a>
 
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Training</h2>
@@ -194,14 +201,15 @@ function RecordForm({ form, setForm, types, onSave, onCancel }) {
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Date passed</label>
+          <label className="text-xs font-medium text-muted-foreground">Training / Evaluation date</label>
           <input type="date" value={form.passed_date || ''} onChange={(e) => set('passed_date', e.target.value)}
             className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none focus:border-primary" />
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Expiration (optional)</label>
-          <input type="date" value={form.expires_date || ''} onChange={(e) => set('expires_date', e.target.value)}
-            className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none focus:border-primary" />
+          <label className="text-xs font-medium text-muted-foreground">Expires (auto: +3 yrs)</label>
+          <div className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-muted text-sm text-muted-foreground">
+            {form.passed_date ? (() => { const d = new Date(form.passed_date); d.setFullYear(d.getFullYear() + 3); return d.toISOString().slice(0, 10); })() : '—'}
+          </div>
         </div>
       </div>
       <div>

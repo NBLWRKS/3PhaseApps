@@ -184,6 +184,12 @@ const safety = {
   addRecord: (employeeId, data) => request('POST', `/safety/employees/${employeeId}/records`, { body: data }),
   updateRecord: (id, data) => request('PUT', `/safety/records/${id}`, { body: data }),
   deleteRecord: (id) => request('DELETE', `/safety/records/${id}`),
+  // Public card (no authentication required)
+  getPublicCard: async (slug) => {
+    const res = await fetch(`${API_BASE}/public/safety/card/${encodeURIComponent(slug)}`);
+    if (!res.ok) throw new Error('Not found');
+    return res.json();
+  },
 };
 
 export const base44 = {

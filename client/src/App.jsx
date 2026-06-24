@@ -18,16 +18,10 @@ import Admin from '@/pages/Admin';
 import Highlight from '@/pages/Highlight';
 import SafetyList from '@/pages/SafetyList';
 import SafetyEmployee from '@/pages/SafetyEmployee';
+import SafetyCard from '@/pages/SafetyCard';
 import Dashboard from '@/pages/Dashboard';
 import ReportEditor from '@/pages/ReportEditor';
 import ReportView from '@/pages/ReportView';
-
-// Redirect the capitalized /SafetyCredentials/:slug URL (from the spec) to the
-// canonical lowercase /safety/:slug route, preserving the employee slug.
-function SafetyCredentialsRedirect() {
-  const { slug } = useParams();
-  return <Navigate to={`/safety/${slug}`} replace />;
-}
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -49,7 +43,10 @@ const AuthenticatedApp = () => {
       // which avoids a redirect loop when a stored token has expired.
       const path = window.location.pathname;
       const publicPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/', '/admin'];
-      if (!publicPaths.includes(path)) {
+      // The public credential card (/SafetyCredentials/:slug) is viewable
+      // without logging in, so it must not trigger a login redirect.
+      const isPublicCard = path.startsWith('/SafetyCredentials');
+      if (!publicPaths.includes(path) && !isPublicCard) {
         navigateToLogin();
         return null;
       }
@@ -70,9 +67,10 @@ const AuthenticatedApp = () => {
       <Route path="/Highlight" element={<Navigate to="/highlight" replace />} />
       <Route path="/safety" element={<SafetyList />} />
       <Route path="/safety/:slug" element={<SafetyEmployee />} />
-      {/* Capitalized URL form from the spec, e.g. /SafetyCredentials/DayanaAballay/ */}
+      {/* PUBLIC, no-login credential card at the shareable spec URL:
+          e.g. /SafetyCredentials/DayanaAballay */}
       <Route path="/SafetyCredentials" element={<Navigate to="/safety" replace />} />
-      <Route path="/SafetyCredentials/:slug" element={<SafetyCredentialsRedirect />} />
+      <Route path="/SafetyCredentials/:slug" element={<SafetyCard />} />
 
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<AppLayout />}>

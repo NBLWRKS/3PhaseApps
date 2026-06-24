@@ -6,6 +6,15 @@ import { authRequired, appReadRequired, appEditRequired } from './auth.js';
 const router = express.Router();
 const now = () => new Date().toISOString();
 
+// Add N years to an ISO date string (YYYY-MM-DD), returning the same format.
+function addYears(isoDate, years) {
+  if (!isoDate) return null;
+  const d = new Date(isoDate);
+  if (isNaN(d)) return null;
+  d.setFullYear(d.getFullYear() + years);
+  return d.toISOString().slice(0, 10);
+}
+
 router.use(authRequired);
 // All safety routes need read; mutations additionally need edit (per-route).
 router.use(appReadRequired('safety'));
@@ -115,14 +124,20 @@ router.post('/employees/:id/records', appEditRequired('safety'), (req, res) => {
   if (!data.training) return res.status(400).json({ error: 'training is required' });
   const id = 'tr_' + nanoid(10);
   const ts = now();
+  // Training and evaluation dates are usually the same; default evaluation to
+  // the passed date if not provided. Expiration is auto-computed as 3 years
+  // from the evaluation date (per the physical card), unless one is given.
+  const evaluation = data.evaluation_date || data.passed_date || null;
+  const expires = data.expires_date || addYears(evaluation, 3);
   db.prepare(`
-    INSERT INTO training_records (id, employee_id, training, passed_date, expires_date, notes, created_by, updated_by, created_date, updated_date)
-    VALUES (@id, @employee_id, @training, @passed_date, @expires_date, @notes, @created_by, @updated_by, @created_date, @updated_date)
+    INSERT INTO training_records (id, employee_id, training, passed_date, evaluation_date, expires_date, notes, created_by, updated_by, created_date, updated_date)
+    VALUES (@id, @employee_id, @training, @passed_date, @evaluation_date, @expires_date, @notes, @created_by, @updated_by, @created_date, @updated_date)
   `).run({
     id, employee_id: emp.id,
     training: data.training,
     passed_date: data.passed_date || null,
-    expires_date: data.expires_date || null,
+    evaluation_date: evaluation,
+    expires_date: expires,
     notes: data.notes || null,
     created_by: req.user.email, updated_by: req.user.email,
     created_date: ts, updated_date: ts,
@@ -135,15 +150,26 @@ router.put('/records/:id', appEditRequired('safety'), (req, res) => {
   if (!rec) return res.status(404).json({ error: 'Record not found' });
   const data = req.body || {};
   const pick = (k) => (k in data ? data[k] : rec[k]);
+  // Recompute evaluation + expiration the same way as on create.
+  const evaluation = data.evaluation_date !== undefined
+    ? (data.evaluation_date || null)
+    : (rec.evaluation_date || rec.passed_date || null);
+  const passed = data.passed_date !== undefined ? (data.passed_date || null) : rec.passed_date;
+  // Expiration auto-derives from evaluation date unless explicitly provided.
+  const expires = data.expires_date
+    ? data.expires_date
+    : addYears(evaluation || passed, 3);
   db.prepare(`
     UPDATE training_records SET training = @training, passed_date = @passed_date,
-      expires_date = @expires_date, notes = @notes, updated_by = @updated_by, updated_date = @updated_date
+      evaluation_date = @evaluation_date, expires_date = @expires_date, notes = @notes,
+      updated_by = @updated_by, updated_date = @updated_date
     WHERE id = @id
   `).run({
     id: rec.id,
     training: pick('training'),
-    passed_date: data.passed_date !== undefined ? (data.passed_date || null) : rec.passed_date,
-    expires_date: data.expires_date !== undefined ? (data.expires_date || null) : rec.expires_date,
+    passed_date: passed,
+    evaluation_date: evaluation,
+    expires_date: expires,
     notes: data.notes !== undefined ? (data.notes || null) : rec.notes,
     updated_by: req.user.email, updated_date: now(),
   });
