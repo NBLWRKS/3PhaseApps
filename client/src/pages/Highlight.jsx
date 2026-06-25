@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  ArrowLeft, Upload, Loader2, Trash2, Save, Highlighter, Plus, FolderOpen, X, Zap, Wrench, Download, RotateCw, Tag,
+  ArrowLeft, Upload, Loader2, Trash2, Save, Highlighter, Plus, FolderOpen, X, Zap, Wrench, Download, RotateCw, Tag, Search,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -54,6 +54,7 @@ export default function Highlight() {
   const [showLibrary, setShowLibrary] = useState(false);
   const [libTeamFilter, setLibTeamFilter] = useState('all'); // all|electrical|mechanical
   const [libSort, setLibSort] = useState('recent'); // recent|oldest|title
+  const [librarySearch, setLibrarySearch] = useState(''); // filter library by title/project
 
   // Drawing state
   const fileInputRef = useRef(null);
@@ -79,6 +80,13 @@ export default function Highlight() {
     if (libTeamFilter !== 'all') {
       list = list.filter((d) => (d.team || '') === libTeamFilter);
     }
+    const q = librarySearch.trim().toLowerCase();
+    if (q) {
+      list = list.filter((d) =>
+        (d.title || '').toLowerCase().includes(q) ||
+        (d.project || '').toLowerCase().includes(q)
+      );
+    }
     const sorted = [...list];
     if (libSort === 'title') {
       sorted.sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' }));
@@ -91,7 +99,7 @@ export default function Highlight() {
       );
     }
     return sorted;
-  }, [savedDocs, libTeamFilter, libSort]);
+  }, [savedDocs, libTeamFilter, libSort, librarySearch]);
 
   // Load saved documents for the library drawer.
   const loadDocs = useCallback(async () => {
@@ -793,6 +801,26 @@ export default function Highlight() {
               <button onClick={() => setShowLibrary(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="w-5 h-5" />
               </button>
+            </div>
+
+            {/* Search by title or project */}
+            <div className="relative mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <input
+                value={librarySearch}
+                onChange={(e) => setLibrarySearch(e.target.value)}
+                placeholder="Search by title or project…"
+                className="w-full pl-9 pr-8 py-2 rounded-lg border border-border bg-background text-sm outline-none focus:border-primary"
+              />
+              {librarySearch && (
+                <button
+                  onClick={() => setLibrarySearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  title="Clear"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
             {/* Team filter */}
