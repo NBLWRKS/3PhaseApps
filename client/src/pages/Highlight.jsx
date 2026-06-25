@@ -60,6 +60,10 @@ export default function Highlight() {
   // One <img> ref per page, so we can compute each page's display scale.
   const pageImgRefs = useRef([]);
   const [drawing, setDrawing] = useState(null); // {page,x,y,w,h,ox,oy} natural px
+  // Direct-manipulation of an existing region: dragging its body to move, or
+  // dragging its rotate handle to spin it. Null when not manipulating.
+  // { mode:'move'|'rotate', id, page, startX, startY, origX, origY, cx, cy, startAngle, startPointerAngle }
+  const [manip, setManip] = useState(null);
   // renderScales[i] = displayed width / natural width for page i.
   const [renderScales, setRenderScales] = useState({});
   const [zoom, setZoom] = useState(1); // 1 = fit width; >1 zooms in
@@ -223,6 +227,55 @@ export default function Highlight() {
     }
     setDrawing(null);
   };
+
+  // --- Direct manipulation: move a region by dragging its body ---
+  const startMove = (e, r, pageIndex, imgEl) => {
+    if (readOnly) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const p = toNatural(e, pageIndex, imgEl);
+    setSelectedId(r.id);
+    setManip({ mode: 'move', id: r.id, page: pageIndex, startX: p.x, startY: p.y, origX: r.x, origY: r.y });
+  };
+
+  // --- Direct manipulation: rotate a region by dragging its handle ---
+  const startRotate = (e, r, pageIndex, imgEl) => {
+    if (readOnly) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const p = toNatural(e, pageIndex, imgEl);
+    const cx = r.x + r.w / 2;
+    const cy = r.y + r.h / 2;
+    const startPointerAngle = Math.atan2(p.y - cy, p.x - cx) * (180 / Math.PI);
+    setSelectedId(r.id);
+    setManip({ mode: 'rotate', id: r.id, page: pageIndex, cx, cy, startAngle: r.angle || 0, startPointerAngle });
+  };
+
+  // Called on pointer-move over the page while a manipulation is active.
+  const onManipMove = (e, pageIndex, imgEl) => {
+    if (!manip || manip.page !== pageIndex) return;
+    const p = toNatural(e, pageIndex, imgEl);
+    if (manip.mode === 'move') {
+      const dims = pages[pageIndex];
+      setRegions((rs) => rs.map((x) => {
+        if (x.id !== manip.id) return x;
+        let nx = manip.origX + (p.x - manip.startX);
+        let ny = manip.origY + (p.y - manip.startY);
+        // Keep the rectangle within the page bounds.
+        nx = Math.max(0, Math.min(dims.width - x.w, nx));
+        ny = Math.max(0, Math.min(dims.height - x.h, ny));
+        return { ...x, x: Math.round(nx), y: Math.round(ny) };
+      }));
+    } else if (manip.mode === 'rotate') {
+      const cur = Math.atan2(p.y - manip.cy, p.x - manip.cx) * (180 / Math.PI);
+      let next = manip.startAngle + (cur - manip.startPointerAngle);
+      // Normalize to a friendly -180..180 range, rounded to whole degrees.
+      next = Math.round(((next + 180) % 360 + 360) % 360 - 180);
+      setRegions((rs) => rs.map((x) => (x.id === manip.id ? { ...x, angle: next } : x)));
+    }
+  };
+
+  const endManip = () => setManip(null);
 
   const removeRegion = (id) => setRegions((r) => r.filter((x) => x.id !== id));
   const renameRegion = (id, label) =>
@@ -514,11 +567,15 @@ export default function Highlight() {
                       <div className="overflow-auto border border-border rounded-lg bg-muted">
                         <div
                           className="relative select-none"
+                          data-page-surface
                           style={{ width: `${zoom * 100}%`, cursor: 'crosshair', touchAction: 'none' }}
-                          onPointerDown={(e) => onPointerDown(e, pageIndex, e.currentTarget.querySelector('img'))}
-                          onPointerMove={(e) => onPointerMove(e, pageIndex, e.currentTarget.querySelector('img'))}
-                          onPointerUp={onPointerUp}
-                          onPointerLeave={onPointerUp}
+                          onPointerDown={(e) => { if (!manip) onPointerDown(e, pageIndex, e.currentTarget.querySelector('img')); }}
+                          onPointerMove={(e) => {
+                            if (manip) onManipMove(e, pageIndex, e.currentTarget.querySelector('img'));
+                            else onPointerMove(e, pageIndex, e.currentTarget.querySelector('img'));
+                          }}
+                          onPointerUp={() => { if (manip) endManip(); else onPointerUp(); }}
+                          onPointerLeave={() => { if (manip) endManip(); else onPointerUp(); }}
                         >
                           <img
                             ref={(el) => { pageImgRefs.current[pageIndex] = el; }}
@@ -533,7 +590,7 @@ export default function Highlight() {
                           <div
                             key={r.id}
                             className="absolute group"
-                            onPointerDown={(e) => { if (!readOnly) { e.stopPropagation(); setSelectedId(r.id); } }}
+                            onPointerDown={(e) => startMove(e, r, pageIndex, e.currentTarget.closest('[data-page-surface]').querySelector('img'))}
                             style={{
                               left: r.x * scale,
                               top: r.y * scale,
@@ -545,7 +602,8 @@ export default function Highlight() {
                               transformOrigin: 'center center',
                               outline: selectedId === r.id ? '2px dashed #111' : undefined,
                               outlineOffset: 2,
-                              cursor: readOnly ? 'default' : 'pointer',
+                              cursor: readOnly ? 'default' : 'move',
+                              touchAction: 'none',
                             }}
                           >
                             {r.label ? (
@@ -556,6 +614,24 @@ export default function Highlight() {
                                 {r.label}
                               </span>
                             ) : null}
+                            {/* Rotate handle — appears above the rectangle when selected */}
+                            {!readOnly && selectedId === r.id && (
+                              <>
+                                <div
+                                  className="absolute left-1/2 -translate-x-1/2"
+                                  style={{ top: -26, width: 2, height: 20, backgroundColor: '#111' }}
+                                />
+                                <div
+                                  onPointerDown={(e) => startRotate(e, r, pageIndex, e.currentTarget.closest('[data-page-surface]').querySelector('img'))}
+                                  title="Drag to rotate"
+                                  className="absolute left-1/2 -translate-x-1/2 rounded-full bg-white border-2 shadow"
+                                  style={{
+                                    top: -38, width: 14, height: 14, marginLeft: -1,
+                                    borderColor: '#111', cursor: 'grab', touchAction: 'none',
+                                  }}
+                                />
+                              </>
+                            )}
                           </div>
                         ))}
                         {/* Live drawing rectangle (only on the active page) */}
@@ -639,18 +715,12 @@ export default function Highlight() {
                         {!readOnly && (
                           <div className="flex items-center gap-2 mt-1.5 pl-5">
                             <RotateCw className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                            <input
-                              type="range"
-                              min="-90"
-                              max="90"
-                              step="1"
-                              value={r.angle || 0}
-                              onChange={(e) => rotateRegion(r.id, e.target.value)}
-                              className="flex-1 h-1 accent-primary"
-                            />
-                            <span className="text-[10px] text-muted-foreground tabular-nums w-9 text-right flex-shrink-0">{r.angle || 0}°</span>
+                            <span className="text-[10px] text-muted-foreground tabular-nums">{r.angle || 0}°</span>
+                            <span className="text-[10px] text-muted-foreground/70 flex-1">
+                              {selectedId === r.id ? 'drag the handle on the rectangle to rotate' : 'select to move / rotate on the drawing'}
+                            </span>
                             {r.angle ? (
-                              <button onClick={() => rotateRegion(r.id, 0)} className="text-[10px] text-muted-foreground hover:text-foreground underline flex-shrink-0">0</button>
+                              <button onClick={() => rotateRegion(r.id, 0)} className="text-[10px] text-muted-foreground hover:text-foreground underline flex-shrink-0">reset</button>
                             ) : null}
                           </div>
                         )}
