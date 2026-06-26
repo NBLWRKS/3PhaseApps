@@ -24,7 +24,7 @@ function fmt(d) {
   try { return format(parseISO(d), 'MMM d, yyyy'); } catch { return d; }
 }
 
-const EMPTY = { training: '', passed_date: '', expires_date: '', notes: '' };
+const EMPTY = { training: '', passed_date: '', expires_date: '', notes: '', no_expiry: false };
 
 export default function SafetyEmployee() {
   const { slug } = useParams();
@@ -60,6 +60,8 @@ export default function SafetyEmployee() {
       passed_date: rec.passed_date || '',
       expires_date: rec.expires_date || '',
       notes: rec.notes || '',
+      // A record with a date passed but no expiration is treated as no-expiry.
+      no_expiry: !!rec.passed_date && !rec.expires_date,
     });
     setEditingId(rec.id);
   };
@@ -206,12 +208,23 @@ function RecordForm({ form, setForm, types, onSave, onCancel }) {
             className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none focus:border-primary" />
         </div>
         <div>
-          <label className="text-xs font-medium text-muted-foreground">Expires (auto: +3 yrs)</label>
+          <label className="text-xs font-medium text-muted-foreground">{form.no_expiry ? 'Expires' : 'Expires (auto: +3 yrs)'}</label>
           <div className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-muted text-sm text-muted-foreground">
-            {form.passed_date ? (() => { const d = new Date(form.passed_date); d.setFullYear(d.getFullYear() + 3); return d.toISOString().slice(0, 10); })() : '—'}
+            {form.no_expiry
+              ? 'No expiry'
+              : (form.passed_date ? (() => { const d = new Date(form.passed_date); d.setFullYear(d.getFullYear() + 3); return d.toISOString().slice(0, 10); })() : '—')}
           </div>
         </div>
       </div>
+      <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={!!form.no_expiry}
+          onChange={(e) => set('no_expiry', e.target.checked)}
+          className="w-4 h-4 accent-primary"
+        />
+        <span>No expiry (this certification does not expire)</span>
+      </label>
       <div>
         <label className="text-xs font-medium text-muted-foreground">Notes (cert #, provider…)</label>
         <input value={form.notes || ''} onChange={(e) => set('notes', e.target.value)}

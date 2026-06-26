@@ -128,7 +128,9 @@ router.post('/employees/:id/records', appEditRequired('safety'), (req, res) => {
   // the passed date if not provided. Expiration is auto-computed as 3 years
   // from the evaluation date (per the physical card), unless one is given.
   const evaluation = data.evaluation_date || data.passed_date || null;
-  const expires = data.expires_date || addYears(evaluation, 3);
+  // If the record is flagged no-expiry, store null. Otherwise use an explicit
+  // expiration if provided, else auto-compute 3 years from the evaluation date.
+  const expires = data.no_expiry ? null : (data.expires_date || addYears(evaluation, 3));
   db.prepare(`
     INSERT INTO training_records (id, employee_id, training, passed_date, evaluation_date, expires_date, notes, created_by, updated_by, created_date, updated_date)
     VALUES (@id, @employee_id, @training, @passed_date, @evaluation_date, @expires_date, @notes, @created_by, @updated_by, @created_date, @updated_date)
@@ -155,10 +157,10 @@ router.put('/records/:id', appEditRequired('safety'), (req, res) => {
     ? (data.evaluation_date || null)
     : (rec.evaluation_date || rec.passed_date || null);
   const passed = data.passed_date !== undefined ? (data.passed_date || null) : rec.passed_date;
-  // Expiration auto-derives from evaluation date unless explicitly provided.
-  const expires = data.expires_date
-    ? data.expires_date
-    : addYears(evaluation || passed, 3);
+  // Expiration: null if flagged no-expiry, else explicit value, else auto +3yrs.
+  const expires = data.no_expiry
+    ? null
+    : (data.expires_date ? data.expires_date : addYears(evaluation || passed, 3));
   db.prepare(`
     UPDATE training_records SET training = @training, passed_date = @passed_date,
       evaluation_date = @evaluation_date, expires_date = @expires_date, notes = @notes,
