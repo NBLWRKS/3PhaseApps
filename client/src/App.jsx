@@ -20,6 +20,7 @@ import SafetyList from '@/pages/SafetyList';
 import SafetyEmployee from '@/pages/SafetyEmployee';
 import SafetyCard from '@/pages/SafetyCard';
 import SafetyTrainingTypes from '@/pages/SafetyTrainingTypes';
+import ApplyPacket from '@/pages/ApplyPacket';
 import Dashboard from '@/pages/Dashboard';
 import ReportEditor from '@/pages/ReportEditor';
 import ReportView from '@/pages/ReportView';
@@ -47,7 +48,8 @@ const AuthenticatedApp = () => {
       // The public credential card (/SafetyCredentials/:slug) is viewable
       // without logging in, so it must not trigger a login redirect.
       const isPublicCard = path.startsWith('/SafetyCredentials');
-      if (!publicPaths.includes(path) && !isPublicCard) {
+      const isApply = path.startsWith('/apply');
+      if (!publicPaths.includes(path) && !isPublicCard && !isApply) {
         navigateToLogin();
         return null;
       }
@@ -73,6 +75,8 @@ const AuthenticatedApp = () => {
           e.g. /SafetyCredentials/DayanaAballay */}
       <Route path="/SafetyCredentials" element={<Navigate to="/safety" replace />} />
       <Route path="/SafetyCredentials/:slug" element={<SafetyCard />} />
+      {/* PUBLIC new-hire application packet, no login */}
+      <Route path="/apply" element={<ApplyPacket />} />
 
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<AppLayout />}>
