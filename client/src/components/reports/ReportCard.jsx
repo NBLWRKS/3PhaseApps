@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, User, Layers, ArrowRight, Zap, Wrench } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 
 export default function ReportCard({ report }) {
   const blockCount = report.blocks?.length || 0;
@@ -42,7 +42,7 @@ export default function ReportCard({ report }) {
               <Calendar className="w-3.5 h-3.5" />
               <span>
                 {report.report_date
-                  ? format(new Date(report.report_date), 'MMM d, yyyy')
+                  ? format(parseISO(report.report_date), 'MMM d, yyyy')
                   : 'No date'}
               </span>
             </div>

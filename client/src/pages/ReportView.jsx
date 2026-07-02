@@ -12,7 +12,7 @@ import {
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { ArrowLeft, Pencil, Trash2, Download, Calendar, User, Loader2, Languages, Users, Cpu, Pipette, Images, BedDouble } from 'lucide-react';
 
 export default function ReportView() {
@@ -272,7 +272,7 @@ export default function ReportView() {
             </div>
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4" />
-              {report.report_date ? format(new Date(report.report_date), 'MMMM d, yyyy') : 'No date'}
+              {report.report_date ? format(parseISO(report.report_date), 'MMMM d, yyyy') : 'No date'}
             </div>
           </div>
         </CardContent>
