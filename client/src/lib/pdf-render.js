@@ -8,16 +8,20 @@ import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-// Keep each rendered canvas at a sane resolution so big plans don't blow up
-// browser memory. ~4 megapixels stays crisp for zooming.
-const MAX_PIXELS = 4_000_000;
+// Cap the rasterized resolution per page. For big vector CAD plans (e.g. a 65MB
+// PDF with a few enormous pages), the slow part is rasterizing millions of pixels
+// and holding giant canvases in memory — both scale with pixel count, not file
+// size. Capping lower keeps loading fast; on-screen you zoom anyway, and PNG is
+// kept because it compresses crisp linework better than JPEG. Raise CAP if you
+// need more detail at extreme zoom and can accept slower loads.
+const MAX_PIXELS = 2_400_000;   // ~2.4 MP: noticeably faster than the old 4 MP
 
 async function renderOnePage(page) {
-  let scale = 2.0;
+  let scale = 1.5;
   let viewport = page.getViewport({ scale });
   const area = viewport.width * viewport.height;
   if (area > MAX_PIXELS) {
-    scale = Math.max(0.5, scale * Math.sqrt(MAX_PIXELS / area));
+    scale = Math.max(0.4, scale * Math.sqrt(MAX_PIXELS / area));
     viewport = page.getViewport({ scale });
   }
 
@@ -30,10 +34,15 @@ async function renderOnePage(page) {
 
   await page.render({ canvasContext: ctx, viewport }).promise;
 
+  const w = canvas.width;
+  const h = canvas.height;
   const blob = await new Promise((resolve, reject) => {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Canvas export failed'))), 'image/png');
   });
-  return { blob, width: canvas.width, height: canvas.height };
+  // Free the canvas backing store promptly on big multi-page files.
+  canvas.width = 0;
+  canvas.height = 0;
+  return { blob, width: w, height: h };
 }
 
 // Render EVERY page of the given PDF File.
