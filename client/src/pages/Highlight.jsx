@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  ArrowLeft, Upload, Loader2, Trash2, Save, Highlighter, Plus, FolderOpen, X, Zap, Wrench, Download, RotateCw, Tag, Search,
+  ArrowLeft, Upload, Loader2, Trash2, Save, Highlighter, Plus, FolderOpen, X, Zap, Wrench, Download, RotateCw, Tag, Search, Hand, MousePointer2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -27,6 +27,13 @@ const COLORS = [
   { name: 'Pink', value: '#e0529c' },
   { name: 'Black', value: '#2b2b2b' },
 ];
+
+// Don't hijack the Space key while the user is typing in a field.
+function isTypingTarget(el) {
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+}
 
 export default function Highlight() {
   const navigate = useNavigate();
@@ -68,6 +75,13 @@ export default function Highlight() {
   // renderScales[i] = displayed width / natural width for page i.
   const [renderScales, setRenderScales] = useState({});
   const [zoom, setZoom] = useState(1); // 1 = fit width; >1 zooms in
+  // Navigation: a Pan tool lets you drag the zoomed drawing around with the left
+  // mouse button. Holding Space (or dragging with the middle button) pans
+  // temporarily without leaving the Highlight tool.
+  const [tool, setTool] = useState('highlight'); // 'highlight' | 'pan'
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const panRef = useRef(null);   // { el, startX, startY, startLeft, startTop }
+  const [panning, setPanning] = useState(false);
 
   const hasPages = pages.length > 0;
   const isAdmin = user?.role === 'admin';
@@ -194,6 +208,53 @@ export default function Highlight() {
       x: Math.max(0, Math.min(dims.width, x)),
       y: Math.max(0, Math.min(dims.height, y)),
     };
+  };
+
+  // --- Panning: hold Space (or use the Pan tool / middle mouse) and drag to
+  // move around a zoomed drawing with the left button. ---
+  useEffect(() => {
+    const down = (e) => {
+      if (e.code === 'Space' && !isTypingTarget(e.target)) {
+        e.preventDefault();
+        setSpaceHeld(true);
+      }
+    };
+    const up = (e) => { if (e.code === 'Space') setSpaceHeld(false); };
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+    };
+  }, []);
+
+  // True when a drag should pan instead of draw.
+  const panMode = tool === 'pan' || spaceHeld;
+
+  const startPan = (e, scrollEl) => {
+    if (!scrollEl) return;
+    panRef.current = {
+      el: scrollEl,
+      startX: e.clientX,
+      startY: e.clientY,
+      startLeft: scrollEl.scrollLeft,
+      startTop: scrollEl.scrollTop,
+    };
+    setPanning(true);
+    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* ignore */ }
+  };
+
+  const movePan = (e) => {
+    const p = panRef.current;
+    if (!p) return;
+    // Drag right => content moves right => scroll left decreases.
+    p.el.scrollLeft = p.startLeft - (e.clientX - p.startX);
+    p.el.scrollTop = p.startTop - (e.clientY - p.startY);
+  };
+
+  const endPan = () => {
+    panRef.current = null;
+    setPanning(false);
   };
 
   const onPointerDown = (e, pageIndex, imgEl) => {
@@ -526,8 +587,29 @@ export default function Highlight() {
                 />
               </div>
 
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs font-medium text-muted-foreground">Zoom</span>
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
+                {/* Tool: Highlight (draw) vs Pan (drag to move around) */}
+                <div className="inline-flex rounded-md border border-border overflow-hidden">
+                  <button
+                    onClick={() => setTool('highlight')}
+                    className={`flex items-center gap-1 px-2.5 py-1 text-sm ${tool === 'highlight' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+                    title="Highlight tool — drag to draw a section"
+                  >
+                    <MousePointer2 className="w-3.5 h-3.5" /> Highlight
+                  </button>
+                  <button
+                    onClick={() => setTool('pan')}
+                    className={`flex items-center gap-1 px-2.5 py-1 text-sm border-l border-border ${tool === 'pan' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+                    title="Pan tool — drag to move around the drawing"
+                  >
+                    <Hand className="w-3.5 h-3.5" /> Pan
+                  </button>
+                </div>
+                <span className="text-[11px] text-muted-foreground hidden sm:inline">
+                  or hold <kbd className="px-1 py-0.5 rounded border border-border bg-muted text-[10px]">Space</kbd> to pan
+                </span>
+
+                <span className="text-xs font-medium text-muted-foreground ml-auto">Zoom</span>
                 <div className="inline-flex rounded-md border border-border overflow-hidden">
                   <button
                     onClick={() => setZoom((z) => Math.max(1, Math.round((z - 0.25) * 100) / 100))}
@@ -572,18 +654,38 @@ export default function Highlight() {
                           {regions.filter((r) => r.page === pageIndex).length} section(s)
                         </span>
                       </div>
-                      <div className="overflow-auto border border-border rounded-lg bg-muted">
+                      <div className="overflow-auto border border-border rounded-lg bg-muted" data-scroll-container>
                         <div
                           className="relative select-none"
                           data-page-surface
-                          style={{ width: `${zoom * 100}%`, cursor: 'crosshair', touchAction: 'none' }}
-                          onPointerDown={(e) => { if (!manip) onPointerDown(e, pageIndex, e.currentTarget.querySelector('img')); }}
+                          style={{
+                            width: `${zoom * 100}%`,
+                            cursor: panning ? 'grabbing' : panMode ? 'grab' : 'crosshair',
+                            touchAction: 'none',
+                          }}
+                          onPointerDown={(e) => {
+                            // Middle mouse (button 1) always pans; left button pans
+                            // when the Pan tool is on or Space is held.
+                            if (e.button === 1 || panMode) {
+                              e.preventDefault();
+                              startPan(e, e.currentTarget.closest('[data-scroll-container]'));
+                              return;
+                            }
+                            if (!manip) onPointerDown(e, pageIndex, e.currentTarget.querySelector('img'));
+                          }}
                           onPointerMove={(e) => {
+                            if (panRef.current) { movePan(e); return; }
                             if (manip) onManipMove(e, pageIndex, e.currentTarget.querySelector('img'));
                             else onPointerMove(e, pageIndex, e.currentTarget.querySelector('img'));
                           }}
-                          onPointerUp={() => { if (manip) endManip(); else onPointerUp(); }}
-                          onPointerLeave={() => { if (manip) endManip(); else onPointerUp(); }}
+                          onPointerUp={() => {
+                            if (panRef.current) { endPan(); return; }
+                            if (manip) endManip(); else onPointerUp();
+                          }}
+                          onPointerLeave={() => {
+                            if (panRef.current) { endPan(); return; }
+                            if (manip) endManip(); else onPointerUp();
+                          }}
                         >
                           <img
                             ref={(el) => { pageImgRefs.current[pageIndex] = el; }}
@@ -598,7 +700,16 @@ export default function Highlight() {
                           <div
                             key={r.id}
                             className="absolute group"
-                            onPointerDown={(e) => startMove(e, r, pageIndex, e.currentTarget.closest('[data-page-surface]').querySelector('img'))}
+                            onPointerDown={(e) => {
+                              // In pan mode, let the drag pan the drawing instead
+                              // of grabbing this highlight.
+                              if (e.button === 1 || panMode) {
+                                e.preventDefault();
+                                startPan(e, e.currentTarget.closest('[data-scroll-container]'));
+                                return;
+                              }
+                              startMove(e, r, pageIndex, e.currentTarget.closest('[data-page-surface]').querySelector('img'));
+                            }}
                             style={{
                               left: r.x * scale,
                               top: r.y * scale,
@@ -610,7 +721,7 @@ export default function Highlight() {
                               transformOrigin: 'center center',
                               outline: selectedId === r.id ? '2px dashed #111' : undefined,
                               outlineOffset: 2,
-                              cursor: readOnly ? 'default' : 'move',
+                              cursor: panning ? 'grabbing' : panMode ? 'grab' : readOnly ? 'default' : 'move',
                               touchAction: 'none',
                             }}
                           >
