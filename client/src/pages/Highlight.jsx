@@ -140,11 +140,24 @@ export default function Highlight() {
     setRenderScales(next);
   }, [pages]);
 
+  // A ResizeObserver measures each page image's ACTUAL rendered width and fires
+  // after the browser has finished layout — including when zoom changes the
+  // container width. Reading clientWidth inside a single requestAnimationFrame
+  // raced the layout and left highlights positioned with a stale scale (they
+  // appeared to drift on zoom). The observer removes that race entirely.
   useEffect(() => {
-    // Recompute after the browser has applied the new layout (zoom width).
-    const raf = requestAnimationFrame(updateScales);
+    if (typeof ResizeObserver === 'undefined') {
+      // Fallback for very old browsers: measure on next frame.
+      const raf = requestAnimationFrame(updateScales);
+      window.addEventListener('resize', updateScales);
+      return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', updateScales); };
+    }
+    const ro = new ResizeObserver(() => updateScales());
+    pageImgRefs.current.forEach((img) => { if (img) ro.observe(img); });
+    // Also measure once now in case images are already laid out.
+    updateScales();
     window.addEventListener('resize', updateScales);
-    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', updateScales); };
+    return () => { ro.disconnect(); window.removeEventListener('resize', updateScales); };
   }, [updateScales, pages, zoom]);
 
   if (isLoadingAuth) {
