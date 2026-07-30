@@ -103,10 +103,13 @@ router.put('/employees/:id', appEditRequired('safety'), (req, res) => {
   if (!emp) return res.status(404).json({ error: 'Employee not found' });
   const name = (req.body?.name ?? emp.name).trim();
   const active = req.body?.active != null ? (req.body.active ? 1 : 0) : emp.active;
+  // photo_url and position update only if provided (allow clearing with '').
+  const photo_url = req.body?.photo_url !== undefined ? (req.body.photo_url || null) : emp.photo_url;
+  const position = req.body?.position !== undefined ? (req.body.position || null) : emp.position;
   // Keep the original slug stable (URLs shouldn't break); only regenerate if blank.
   const slug = emp.slug || uniqueSlug(slugify(name), emp.id);
-  db.prepare('UPDATE employees SET name = ?, active = ?, slug = ?, updated_date = ? WHERE id = ?')
-    .run(name, active, slug, now(), emp.id);
+  db.prepare('UPDATE employees SET name = ?, active = ?, slug = ?, photo_url = ?, position = ?, updated_date = ? WHERE id = ?')
+    .run(name, active, slug, photo_url, position, now(), emp.id);
   res.json(db.prepare('SELECT * FROM employees WHERE id = ?').get(emp.id));
 });
 

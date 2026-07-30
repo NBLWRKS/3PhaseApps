@@ -8,15 +8,15 @@ import db from './db.js';
 // from here). The private, editable app stays behind auth in routes.safety.js.
 const router = express.Router();
 
-// GET /api/public/safety/card/:slug -> { name, records: [...] }
+// GET /api/public/safety/card/:slug -> { name, photo_url, position, records: [...] }
 router.get('/card/:slug', (req, res) => {
-  const emp = db.prepare('SELECT id, name, slug FROM employees WHERE slug = ?').get(req.params.slug);
+  const emp = db.prepare('SELECT id, name, slug, photo_url, position FROM employees WHERE slug = ?').get(req.params.slug);
   if (!emp) return res.status(404).json({ error: 'Not found' });
   const records = db.prepare(
     `SELECT id, training, passed_date, evaluation_date, expires_date, notes
      FROM training_records WHERE employee_id = ? ORDER BY passed_date DESC`
   ).all(emp.id);
-  res.json({ name: emp.name, slug: emp.slug, records });
+  res.json({ name: emp.name, slug: emp.slug, photo_url: emp.photo_url, position: emp.position, records });
 });
 
 export default router;

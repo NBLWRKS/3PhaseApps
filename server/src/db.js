@@ -116,6 +116,8 @@ ensureColumn('highlights', 'project', 'TEXT');
 ensureColumn('highlights', 'team', 'TEXT');
 ensureColumn('highlights', 'legend', "TEXT NOT NULL DEFAULT '{}'");
 ensureColumn('training_records', 'evaluation_date', 'TEXT');
+ensureColumn('employees', 'photo_url', 'TEXT');
+ensureColumn('employees', 'position', 'TEXT');
 
 // --- Seed Safety Credentials data on first run (only if employees is empty) ---
 function slugify(name) {
