@@ -3,7 +3,7 @@
 // snapshot it with html2canvas, and place each snapshot on its own CR80-sized
 // page in a single PDF. The QR code is generated client-side and points to the
 // employee's public credential page.
-import QRCode from 'qrcode';
+import qrcodeGen from './qrcode-generator.mjs';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import logoUrl from '@/assets/logo.jpg';
@@ -27,6 +27,31 @@ function publicCardUrl(slug) {
   return `${base}/SafetyCredentials/${slug}`;
 }
 
+// Render a QR code for `text` to a PNG data URL using the vendored, dependency-
+// free generator. Drawn crisp (no smoothing) at a high pixel size for print.
+function qrToDataUrl(text, { size = 320, dark = '#000000', light = '#ffffff' } = {}) {
+  const qr = qrcodeGen(0, 'M'); // type 0 = auto-fit, error correction level M
+  qr.addData(text);
+  qr.make();
+  const count = qr.getModuleCount();
+  const cell = Math.floor(size / count) || 1;
+  const dim = cell * count;
+  const canvas = document.createElement('canvas');
+  canvas.width = dim;
+  canvas.height = dim;
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = light;
+  ctx.fillRect(0, 0, dim, dim);
+  ctx.fillStyle = dark;
+  for (let r = 0; r < count; r++) {
+    for (let c = 0; c < count; c++) {
+      if (qr.isDark(r, c)) ctx.fillRect(c * cell, r * cell, cell, cell);
+    }
+  }
+  return canvas.toDataURL('image/png');
+}
+
 // Convert an image URL to a data URL so html2canvas reliably captures it
 // (avoids cross-origin canvas taint on employee photos served from the API).
 async function toDataUrl(url) {
@@ -47,10 +72,10 @@ async function toDataUrl(url) {
 // Build the card DOM node for one employee (matches the approved design:
 // photo centered on the left, larger logo, name/position, QR bottom-right).
 async function buildCardNode(emp, logoData) {
-  const qrDataUrl = await QRCode.toDataURL(publicCardUrl(emp.slug), {
-    margin: 0,
-    width: 300,
-    color: { dark: NAVY, light: '#ffffff' },
+  const qrDataUrl = qrToDataUrl(publicCardUrl(emp.slug), {
+    size: 300,
+    dark: NAVY,
+    light: '#ffffff',
   });
   const photoData = emp.photo_url ? await toDataUrl(emp.photo_url) : null;
 
