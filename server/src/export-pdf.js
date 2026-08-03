@@ -172,7 +172,6 @@ export async function buildHighlightPdf(docRow) {
       doc.save();
       if (angle) doc.rotate(angle, { origin: [cx, cy] }); // rotate about the rect center
       doc.rect(x, y, w, h).fillOpacity(0.25).fill(color);
-      doc.fillOpacity(1).lineWidth(1.5).strokeColor(color).rect(x, y, w, h).stroke();
       doc.restore();
 
       if (r.label) {

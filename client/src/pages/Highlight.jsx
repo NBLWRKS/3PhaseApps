@@ -729,7 +729,6 @@ export default function Highlight() {
                               width: r.w * scale,
                               height: r.h * scale,
                               backgroundColor: r.color + '40',
-                              border: `2px solid ${r.color}`,
                               transform: r.angle ? `rotate(${r.angle}deg)` : undefined,
                               transformOrigin: 'center center',
                               outline: selectedId === r.id ? '2px dashed #111' : undefined,
