@@ -320,6 +320,22 @@ export default function Highlight() {
     setManip({ mode: 'move', id: r.id, page: pageIndex, startX: p.x, startY: p.y, origX: r.x, origY: r.y });
   };
 
+  // --- Direct manipulation: resize a region by dragging an edge/corner handle.
+  // `dir` is one of n,s,e,w,ne,nw,se,sw — which edges move. ---
+  const startResize = (e, r, pageIndex, imgEl, dir) => {
+    if (readOnly) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const p = toNatural(e, pageIndex, imgEl);
+    setSelectedId(r.id);
+    setManip({
+      mode: 'resize', dir, id: r.id, page: pageIndex,
+      startX: p.x, startY: p.y,
+      origX: r.x, origY: r.y, origW: r.w, origH: r.h,
+      angle: r.angle || 0,
+    });
+  };
+
   // --- Direct manipulation: rotate a region by dragging its handle ---
   const startRotate = (e, r, pageIndex, imgEl) => {
     if (readOnly) return;
@@ -354,6 +370,37 @@ export default function Highlight() {
       // Normalize to a friendly -180..180 range, rounded to whole degrees.
       next = Math.round(((next + 180) % 360 + 360) % 360 - 180);
       setRegions((rs) => rs.map((x) => (x.id === manip.id ? { ...x, angle: next } : x)));
+    } else if (manip.mode === 'resize') {
+      const dims = pages[pageIndex];
+      const MIN = 8; // minimum box size in natural px
+      // Pointer delta in page space.
+      const dxPage = p.x - manip.startX;
+      const dyPage = p.y - manip.startY;
+      // Project the delta onto the box's local axes so resizing feels correct
+      // even when the box is rotated.
+      const a = (manip.angle || 0) * (Math.PI / 180);
+      const cos = Math.cos(a), sin = Math.sin(a);
+      const dLocalX = dxPage * cos + dyPage * sin;   // along box width
+      const dLocalY = -dxPage * sin + dyPage * cos;  // along box height
+      const dir = manip.dir;
+      let { origX: nx, origY: ny, origW: nw, origH: nh } = manip;
+      // East/West affect width; North/South affect height. West/North also move origin.
+      if (dir.includes('e')) nw = manip.origW + dLocalX;
+      if (dir.includes('w')) { nw = manip.origW - dLocalX; nx = manip.origX + dLocalX; }
+      if (dir.includes('s')) nh = manip.origH + dLocalY;
+      if (dir.includes('n')) { nh = manip.origH - dLocalY; ny = manip.origY + dLocalY; }
+      // Enforce a minimum size (and stop the origin from overshooting).
+      if (nw < MIN) { if (dir.includes('w')) nx -= (MIN - nw); nw = MIN; }
+      if (nh < MIN) { if (dir.includes('n')) ny -= (MIN - nh); nh = MIN; }
+      // Clamp within the page for un-rotated boxes (rotated boxes clamp loosely).
+      if (!manip.angle) {
+        nx = Math.max(0, nx); ny = Math.max(0, ny);
+        nw = Math.min(nw, dims.width - nx);
+        nh = Math.min(nh, dims.height - ny);
+      }
+      setRegions((rs) => rs.map((x) => (x.id === manip.id
+        ? { ...x, x: Math.round(nx), y: Math.round(ny), w: Math.round(nw), h: Math.round(nh) }
+        : x)));
     }
   };
 
@@ -761,6 +808,28 @@ export default function Highlight() {
                                     borderColor: '#111', cursor: 'grab', touchAction: 'none',
                                   }}
                                 />
+                                {/* Resize handles: 4 edges (widen/heighten) + 4 corners */}
+                                {[
+                                  { dir: 'e', style: { right: -6, top: '50%', marginTop: -6 }, cursor: 'ew-resize' },
+                                  { dir: 'w', style: { left: -6, top: '50%', marginTop: -6 }, cursor: 'ew-resize' },
+                                  { dir: 'n', style: { top: -6, left: '50%', marginLeft: -6 }, cursor: 'ns-resize' },
+                                  { dir: 's', style: { bottom: -6, left: '50%', marginLeft: -6 }, cursor: 'ns-resize' },
+                                  { dir: 'ne', style: { top: -6, right: -6 }, cursor: 'nesw-resize' },
+                                  { dir: 'nw', style: { top: -6, left: -6 }, cursor: 'nwse-resize' },
+                                  { dir: 'se', style: { bottom: -6, right: -6 }, cursor: 'nwse-resize' },
+                                  { dir: 'sw', style: { bottom: -6, left: -6 }, cursor: 'nesw-resize' },
+                                ].map((h) => (
+                                  <div
+                                    key={h.dir}
+                                    onPointerDown={(e) => startResize(e, r, pageIndex, e.currentTarget.closest('[data-page-surface]').querySelector('img'), h.dir)}
+                                    title="Drag to resize"
+                                    className="absolute bg-white border-2 shadow"
+                                    style={{
+                                      width: 12, height: 12, borderColor: '#111', borderRadius: 2,
+                                      cursor: h.cursor, touchAction: 'none', ...h.style,
+                                    }}
+                                  />
+                                ))}
                               </>
                             )}
                           </div>
