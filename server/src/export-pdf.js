@@ -130,18 +130,19 @@ export async function buildHighlightPdf(docRow) {
   const doc = new PDFDocument({ size: 'A4', margin: 24 });
   const bufPromise = collectDoc(doc);
 
-  // Title header
-  doc.fillColor('#2b2b2b').fontSize(16).font('Helvetica-Bold').text(docRow.title || 'Highlighted document', 24, 24);
-  const sub = [docRow.project ? `Project: ${docRow.project}` : null, docRow.team ? `Team: ${docRow.team}` : null]
-    .filter(Boolean).join('    ');
-  if (sub) doc.moveDown(0.2).fontSize(10).font('Helvetica').fillColor('#555').text(sub);
+  // Compute the color-key entries up front (used as an overlay on page 1).
+  const legend = docRow.legend && typeof docRow.legend === 'object' ? docRow.legend : {};
+  const usedColors = [...new Set(regions.map((r) => r.color).filter(Boolean))];
+  const legendEntries = usedColors
+    .map((color) => ({ color, text: legend[color] }))
+    .filter((e) => e.text && String(e.text).trim());
 
   for (let i = 0; i < pages.length; i++) {
     const pg = pages[i];
     const imgBuf = pageImages[i];
-    // Every page gets its own sheet; the first one starts a fresh page too so
-    // the title header sits on its own area above page 1's image.
-    doc.addPage();
+    // The document opens with one page already, so only add a fresh sheet for
+    // subsequent pages. This puts the first drawing on page 1 (no title page).
+    if (i > 0) doc.addPage();
 
     const availW = doc.page.width - 48;
     const availH = doc.page.height - 48;
@@ -182,37 +183,72 @@ export async function buildHighlightPdf(docRow) {
         doc.restore();
       }
     }
-  }
 
-  // ---- Color key legend ----
-  const legend = docRow.legend && typeof docRow.legend === 'object' ? docRow.legend : {};
-  // Only colors that are actually used AND have a meaning typed in.
-  const usedColors = [...new Set(regions.map((r) => r.color).filter(Boolean))];
-  const legendEntries = usedColors
-    .map((color) => ({ color, text: legend[color] }))
-    .filter((e) => e.text && String(e.text).trim());
-
-  if (legendEntries.length) {
-    doc.addPage();
-    doc.fillColor('#2b2b2b').fontSize(16).font('Helvetica-Bold').text('Color Key', 24, 28);
-    doc.moveDown(0.6);
-    const swatch = 14;
-    const rowH = 24;
-    let ly = doc.y;
-    for (const { color, text } of legendEntries) {
-      doc.save();
-      doc.rect(24, ly, swatch, swatch).fillOpacity(1).fill(color);
-      doc.lineWidth(0.75).strokeColor('#888').rect(24, ly, swatch, swatch).stroke();
-      doc.restore();
-      doc.fillColor('#2b2b2b').fontSize(11).font('Helvetica')
-        .text(String(text), 24 + swatch + 10, ly + 2, { width: doc.page.width - 24 - swatch - 10 - 24 });
-      ly += rowH;
-      if (ly > doc.page.height - 40) { doc.addPage(); ly = 40; }
+    // ---- Color key legend, overlaid on the drawing (first page only) ----
+    if (i === 0 && legendEntries.length) {
+      drawLegendBox(doc, legendEntries, offX + drawW, offY + drawH);
     }
   }
 
   doc.end();
   return bufPromise;
+}
+
+// Draw the color key as a compact box anchored to the bottom-right corner of
+// the drawing area (brX, brY). A semi-opaque white panel keeps it readable
+// over busy linework without hiding a full separate page.
+function drawLegendBox(doc, entries, brX, brY) {
+  const pad = 6;
+  const swatch = 9;
+  const gap = 6;
+  const rowH = 15;
+  const fontSize = 8;
+  const titleH = 13;
+
+  // Width sized to the longest entry text (roughly), clamped to a sane range.
+  doc.font('Helvetica').fontSize(fontSize);
+  let textW = 0;
+  for (const { text } of entries) {
+    textW = Math.max(textW, doc.widthOfString(String(text)));
+  }
+  const boxW = Math.min(240, Math.max(90, pad + swatch + gap + textW + pad));
+  const boxH = pad + titleH + entries.length * rowH + pad - 2;
+
+  // Anchor bottom-right with a small inset so it floats just inside the drawing
+  // corner rather than hugging the very edge (where CAD title blocks sit).
+  const inset = 10;
+  let x = brX - boxW - inset;
+  let y = brY - boxH - inset;
+  x = Math.max(24, x);
+  y = Math.max(24, y);
+
+  // Panel background (semi-opaque white) + border.
+  doc.save();
+  doc.fillOpacity(0.85).fillColor('#ffffff').rect(x, y, boxW, boxH).fill();
+  doc.restore();
+  doc.save();
+  doc.fillOpacity(1).lineWidth(0.75).strokeColor('#888').rect(x, y, boxW, boxH).stroke();
+  doc.restore();
+
+  // Title
+  doc.fillOpacity(1).fillColor('#2b2b2b').font('Helvetica-Bold').fontSize(9)
+    .text('Color Key', x + pad, y + pad, { lineBreak: false });
+
+  // Rows
+  let ry = y + pad + titleH;
+  for (const { color, text } of entries) {
+    doc.save();
+    doc.fillOpacity(1).fillColor(color).rect(x + pad, ry, swatch, swatch).fill();
+    doc.lineWidth(0.5).strokeColor('#666').rect(x + pad, ry, swatch, swatch).stroke();
+    doc.restore();
+    doc.fillOpacity(1).fillColor('#2b2b2b').font('Helvetica').fontSize(fontSize)
+      .text(String(text), x + pad + swatch + gap, ry + 1, {
+        width: boxW - pad - swatch - gap - pad,
+        lineBreak: false,
+        ellipsis: true,
+      });
+    ry += rowH;
+  }
 }
 
 export { loadImageBuffer };
