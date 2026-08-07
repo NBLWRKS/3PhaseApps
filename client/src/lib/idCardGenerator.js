@@ -6,13 +6,20 @@
 import qrcodeGen from './qrcode-generator.mjs';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import logoUrl from '@/assets/logo.jpg';
+import logoUrl from '@/assets/logo-gold.png';
 
 const NAVY = '#1A2238';
 const RED = '#C0392B';
 const GOLD = '#E8B33D';
 const GREEN = '#2E7D5B';
 const BLUE = '#2C6E9B';
+// Viking (black + gold) theme
+const VK_BLACK = '#0a0a0a';
+const VK_GOLD = '#C9A24B';
+const VK_GOLD_BRIGHT = '#E8C36B';
+const VK_GRAY = '#9a9a9a';
+const VK_CREAM = '#f5ecd8';
+const VK_QR_DARK = '#3d2f14'; // bronze QR modules — dark-on-light, verified scannable
 
 // CR80 card dimensions in inches — PORTRAIT orientation (badge/lanyard).
 const CARD_W_IN = 2.125;
@@ -98,8 +105,8 @@ function squareCropDataUrl(dataUrl, sizePx) {
 async function buildCardNode(emp, logoData) {
   const qrDataUrl = qrToDataUrl(publicCardUrl(emp.slug), {
     size: 300,
-    dark: NAVY,
-    light: '#ffffff',
+    dark: VK_QR_DARK,
+    light: VK_CREAM,
   });
   const pSize = Math.round(0.85 * PX_PER_IN);
   const rawPhoto = emp.photo_url ? await toDataUrl(emp.photo_url) : null;
@@ -109,41 +116,49 @@ async function buildCardNode(emp, logoData) {
   const card = document.createElement('div');
   card.style.cssText = `
     width:${CARD_W_PX}px; height:${CARD_H_PX}px; position:relative;
-    background:#ffffff; color:${NAVY}; overflow:hidden;
+    background:${VK_BLACK}; color:#fff; overflow:hidden;
     font-family:'Helvetica Neue',Arial,sans-serif; box-sizing:border-box;
     display:flex; flex-direction:column; align-items:center;
-    padding-bottom:${Math.round(0.1 * PX_PER_IN)}px;
+    border:${Math.round(0.02 * PX_PER_IN)}px solid ${VK_GOLD};
   `;
 
-  // Blue top bar
-  const rail = document.createElement('div');
-  rail.style.cssText = `width:100%; height:${Math.round(0.06 * PX_PER_IN)}px; flex:none; background:${BLUE};`;
-  card.appendChild(rail);
+  // Gold gradient band (top)
+  const bandTop = document.createElement('div');
+  bandTop.style.cssText = `width:100%; height:${Math.round(0.06 * PX_PER_IN)}px; flex:none;
+    background:linear-gradient(90deg, transparent, ${VK_GOLD}, transparent);`;
+  card.appendChild(bandTop);
 
-  // Logo (no white box needed — card is already white)
+  // Inner column with a subtle gold glow behind the logo area
+  const inner = document.createElement('div');
+  inner.style.cssText = `flex:1; display:flex; flex-direction:column; align-items:center; width:100%;
+    padding:${Math.round(0.06 * PX_PER_IN)}px 0 ${Math.round(0.1 * PX_PER_IN)}px; min-height:0;
+    background:radial-gradient(ellipse 80% 28% at 50% 16%, rgba(201,162,75,0.15), transparent 70%);`;
+  card.appendChild(inner);
+
+  // Logo (gold-recolored, transparent background — sits directly on black)
   const logoImg = document.createElement('img');
   logoImg.src = logoData;
-  logoImg.style.cssText = `width:${Math.round(1.05 * PX_PER_IN)}px; display:block; flex:none;
-    margin-top:${Math.round(0.12 * PX_PER_IN)}px;`;
-  card.appendChild(logoImg);
+  logoImg.style.cssText = `width:${Math.round(1.3 * PX_PER_IN)}px; display:block; flex:none;
+    margin-top:${Math.round(0.12 * PX_PER_IN)}px; filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));`;
+  inner.appendChild(logoImg);
 
-  // Photo (square, navy border)
+  // Photo (square, gold border)
   const photoBox = document.createElement('div');
   photoBox.style.cssText = `flex:none; width:${pSize}px; height:${pSize}px;
     border-radius:${Math.round(0.06 * PX_PER_IN)}px; overflow:hidden;
-    border:${Math.round(0.02 * PX_PER_IN)}px solid ${NAVY}; background:#0e1426;
-    margin-top:${Math.round(0.1 * PX_PER_IN)}px; display:flex; align-items:center; justify-content:center;`;
+    border:${Math.round(0.025 * PX_PER_IN)}px solid ${VK_GOLD}; background:#000;
+    margin-top:${Math.round(0.12 * PX_PER_IN)}px; display:flex; align-items:center; justify-content:center;`;
   if (photoData) {
     const img = document.createElement('img');
     img.src = photoData;
     img.style.cssText = 'width:100%; height:100%; object-fit:cover; object-position:center top;';
     photoBox.appendChild(img);
   } else {
-    photoBox.style.color = '#c4ccd8';
+    photoBox.style.color = '#5a4a2a';
     photoBox.style.fontSize = `${Math.round(0.42 * PX_PER_IN)}px`;
     photoBox.textContent = '👤';
   }
-  card.appendChild(photoBox);
+  inner.appendChild(photoBox);
 
   // Name + position block (centered)
   const tag = document.createElement('div');
@@ -152,27 +167,35 @@ async function buildCardNode(emp, logoData) {
   const nameForCard = formatName(emp.name);
   const positionText = (emp.position || '').trim();
   tag.innerHTML = `
-    <div style="font-size:${Math.round(0.06 * PX_PER_IN)}px; letter-spacing:2px; text-transform:uppercase; color:${BLUE}; font-weight:700; margin-bottom:${Math.round(0.015 * PX_PER_IN)}px;">Employee ID</div>
-    <div style="font-size:${Math.round(0.125 * PX_PER_IN)}px; font-weight:800; line-height:1.05; color:${NAVY};">${escapeHtml(nameForCard)}</div>
-    ${positionText ? `<div style="font-size:${Math.round(0.085 * PX_PER_IN)}px; color:${NAVY}; margin-top:${Math.round(0.02 * PX_PER_IN)}px; letter-spacing:0.5px; text-transform:uppercase; font-weight:600;">${escapeHtml(positionText)}</div>` : ''}
-    <div style="font-size:${Math.round(0.055 * PX_PER_IN)}px; color:#6b7280; margin-top:${Math.round(0.03 * PX_PER_IN)}px; letter-spacing:0.5px; text-transform:uppercase; line-height:1.3;">Electrical &amp; Mechanical<br>Field Services</div>
+    <div style="font-size:${Math.round(0.06 * PX_PER_IN)}px; letter-spacing:2.2px; text-transform:uppercase; color:${VK_GOLD}; font-weight:700; margin-bottom:${Math.round(0.015 * PX_PER_IN)}px;">Employee ID</div>
+    <div style="font-size:${Math.round(0.125 * PX_PER_IN)}px; font-weight:800; line-height:1.05; color:#ffffff; letter-spacing:0.02em;">${escapeHtml(nameForCard)}</div>
+    ${positionText ? `<div style="font-size:${Math.round(0.085 * PX_PER_IN)}px; color:${VK_GOLD_BRIGHT}; margin-top:${Math.round(0.02 * PX_PER_IN)}px; letter-spacing:0.5px; text-transform:uppercase; font-weight:600;">${escapeHtml(positionText)}</div>` : ''}
+    <div style="font-size:${Math.round(0.055 * PX_PER_IN)}px; color:${VK_GRAY}; margin-top:${Math.round(0.03 * PX_PER_IN)}px; letter-spacing:0.6px; text-transform:uppercase; line-height:1.3;">Electrical &amp; Mechanical<br>Field Services</div>
   `;
-  card.appendChild(tag);
+  inner.appendChild(tag);
 
-  // QR pinned toward the bottom (dark on white, no box needed)
+  // QR pinned toward the bottom — bronze modules on cream, gold-bordered chip
   const qrWrap = document.createElement('div');
-  qrWrap.style.cssText = `flex:none; margin-top:auto; padding:${Math.round(0.04 * PX_PER_IN)}px;`;
+  qrWrap.style.cssText = `flex:none; margin-top:auto; background:${VK_CREAM};
+    padding:${Math.round(0.045 * PX_PER_IN)}px; border-radius:${Math.round(0.03 * PX_PER_IN)}px;
+    border:1px solid ${VK_GOLD};`;
   const qrImg = document.createElement('img');
   qrImg.src = qrDataUrl;
-  const qrSize = Math.round(0.7 * PX_PER_IN);
+  const qrSize = Math.round(0.66 * PX_PER_IN);
   qrImg.style.cssText = `width:${qrSize}px; height:${qrSize}px; display:block;`;
   qrWrap.appendChild(qrImg);
   const scan = document.createElement('div');
   scan.style.cssText = `font-size:${Math.round(0.045 * PX_PER_IN)}px; letter-spacing:1px;
-    text-transform:uppercase; color:${NAVY}; font-weight:700; text-align:center; margin-top:2px;`;
+    text-transform:uppercase; color:${VK_QR_DARK}; font-weight:700; text-align:center; margin-top:2px;`;
   scan.textContent = 'Scan';
   qrWrap.appendChild(scan);
-  card.appendChild(qrWrap);
+  inner.appendChild(qrWrap);
+
+  // Gold gradient band (bottom)
+  const bandBot = document.createElement('div');
+  bandBot.style.cssText = `width:100%; height:${Math.round(0.06 * PX_PER_IN)}px; flex:none;
+    background:linear-gradient(90deg, transparent, ${VK_GOLD}, transparent);`;
+  card.appendChild(bandBot);
 
   return card;
 }
