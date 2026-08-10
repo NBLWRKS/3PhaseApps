@@ -110,6 +110,59 @@ router.post('/projects', appEditRequired('tracking'), (req, res) => {
   res.json(row);
 });
 
+// Duplicate a project as a fresh template: copies areas + tasks (names + weights
+// + ordering) but RESETS each task's percent to 0 and clears assignee, target
+// date, blocked flag, and notes. Used to reuse a project structure for a new job.
+router.post('/projects/:id/duplicate', appEditRequired('tracking'), (req, res) => {
+  const src = db.prepare('SELECT * FROM tracking_projects WHERE id = ?').get(req.params.id);
+  if (!src) return res.status(404).json({ error: 'Not found' });
+  const newName = (req.body?.name || '').trim() || `${src.name} (copy)`;
+  const ts = now();
+
+  const newProject = {
+    id: id(), name: newName, archived: 0,
+    sort_order: src.sort_order,
+    created_by: req.user?.email || null, created_date: ts, updated_date: ts,
+  };
+
+  const insertProject = db.prepare(`INSERT INTO tracking_projects (id,name,archived,sort_order,created_by,created_date,updated_date)
+    VALUES (@id,@name,@archived,@sort_order,@created_by,@created_date,@updated_date)`);
+  const insertArea = db.prepare(`INSERT INTO tracking_areas (id,project_id,name,sort_order,created_date,updated_date)
+    VALUES (@id,@project_id,@name,@sort_order,@created_date,@updated_date)`);
+  const insertTask = db.prepare(`INSERT INTO tracking_tasks
+    (id,area_id,name,percent,weight,blocked,assignee,target_date,notes,sort_order,created_by,updated_by,created_date,updated_date)
+    VALUES (@id,@area_id,@name,@percent,@weight,@blocked,@assignee,@target_date,@notes,@sort_order,@created_by,@updated_by,@created_date,@updated_date)`);
+
+  const doCopy = db.transaction(() => {
+    insertProject.run(newProject);
+    const areas = db.prepare('SELECT * FROM tracking_areas WHERE project_id = ? ORDER BY sort_order, name').all(src.id);
+    for (const a of areas) {
+      const newAreaId = id();
+      insertArea.run({
+        id: newAreaId, project_id: newProject.id, name: a.name,
+        sort_order: a.sort_order, created_date: ts, updated_date: ts,
+      });
+      const tasks = db.prepare('SELECT * FROM tracking_tasks WHERE area_id = ? ORDER BY sort_order, name').all(a.id);
+      for (const t of tasks) {
+        insertTask.run({
+          id: id(), area_id: newAreaId, name: t.name,
+          percent: 0,            // reset progress
+          weight: t.weight,      // keep weight
+          blocked: 0,            // clear blocked
+          assignee: null,        // clear assignee
+          target_date: null,     // clear target date
+          notes: null,           // clear notes
+          sort_order: t.sort_order,
+          created_by: req.user?.email || null, updated_by: req.user?.email || null,
+          created_date: ts, updated_date: ts,
+        });
+      }
+    }
+  });
+  doCopy();
+  res.json(newProject);
+});
+
 router.put('/projects/:id', appEditRequired('tracking'), (req, res) => {
   const p = db.prepare('SELECT * FROM tracking_projects WHERE id = ?').get(req.params.id);
   if (!p) return res.status(404).json({ error: 'Not found' });

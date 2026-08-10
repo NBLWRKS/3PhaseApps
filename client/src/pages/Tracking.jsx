@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { canRead, canEdit } from '@/lib/permissions';
 import {
   Plus, Trash2, ChevronDown, ChevronRight, Loader2, BarChart3, Table2,
-  Download, Ban, FolderPlus, Layers,
+  Download, Ban, FolderPlus, Layers, Copy, StickyNote, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.jpg';
@@ -87,6 +87,15 @@ export default function Tracking() {
   const delProject = async (p) => {
     if (!confirm(`Delete project "${p.name}" and all its areas and tasks?`)) return;
     try { await base44.tracking.deleteProject(p.id); load(); } catch { toast.error('Failed to delete'); }
+  };
+  const duplicateProject = async (p) => {
+    const name = prompt(`Duplicate "${p.name}" as a new project (structure only, progress reset to 0):`, `${p.name} (copy)`);
+    if (name === null) return; // cancelled
+    try {
+      await base44.tracking.duplicateProject(p.id, name.trim() || undefined);
+      toast.success('Project duplicated');
+      load();
+    } catch { toast.error('Failed to duplicate'); }
   };
   const delArea = async (a) => {
     if (!confirm(`Delete area "${a.name}" and its tasks?`)) return;
@@ -170,6 +179,7 @@ export default function Tracking() {
                 expanded={expanded} toggle={toggle}
                 onAddArea={addArea} onAddTask={addTask}
                 onDelProject={delProject} onDelArea={delArea} onDelTask={delTask}
+                onDuplicateProject={duplicateProject}
                 onSaveTask={saveTask}
               />
             ))}
@@ -191,7 +201,7 @@ function ProgressBar({ percent }) {
   );
 }
 
-function ProjectBlock({ project: p, editable, expanded, toggle, onAddArea, onAddTask, onDelProject, onDelArea, onDelTask, onSaveTask }) {
+function ProjectBlock({ project: p, editable, expanded, toggle, onAddArea, onAddTask, onDelProject, onDelArea, onDelTask, onSaveTask, onDuplicateProject }) {
   const open = expanded.has(`p:${p.id}`);
   const sc = p.status_counts || {};
   return (
@@ -210,6 +220,7 @@ function ProjectBlock({ project: p, editable, expanded, toggle, onAddArea, onAdd
         {editable && (
           <div className="flex items-center gap-1">
             <button onClick={() => onAddArea(p.id)} title="Add area" className="p-1.5 text-muted-foreground hover:text-primary"><Plus className="w-4 h-4" /></button>
+            <button onClick={() => onDuplicateProject(p)} title="Duplicate project (structure only)" className="p-1.5 text-muted-foreground hover:text-primary"><Copy className="w-4 h-4" /></button>
             <button onClick={() => onDelProject(p)} title="Delete project" className="p-1.5 text-muted-foreground hover:text-destructive"><Trash2 className="w-4 h-4" /></button>
           </div>
         )}
@@ -262,6 +273,7 @@ function AreaBlock({ area: a, editable, expanded, toggle, onAddTask, onDelArea, 
                 <th className="text-left font-medium px-2 py-1.5 w-28">Status</th>
                 <th className="text-left font-medium px-2 py-1.5 w-32 hidden md:table-cell">Assignee</th>
                 <th className="text-left font-medium px-2 py-1.5 w-32 hidden lg:table-cell">Target</th>
+                <th className="text-center font-medium px-2 py-1.5 w-12">Notes</th>
                 {editable && <th className="w-10"></th>}
               </tr>
             </thead>
@@ -279,8 +291,17 @@ function AreaBlock({ area: a, editable, expanded, toggle, onAddTask, onDelArea, 
 
 function TaskRow({ task: t, editable, onSave, onDelete }) {
   const [local, setLocal] = useState(t);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesDraft, setNotesDraft] = useState(t.notes || '');
   useEffect(() => { setLocal(t); }, [t.id, t.percent, t.weight, t.blocked, t.name, t.assignee, t.target_date]);
+  useEffect(() => { setNotesDraft(t.notes || ''); }, [t.id, t.notes]);
   const meta = STATUS_META[t.status] || STATUS_META.not_started;
+  const hasNote = !!(t.notes && t.notes.trim());
+
+  const saveNotes = () => {
+    setNotesOpen(false);
+    if ((notesDraft || '') !== (t.notes || '')) onSave(t, { notes: notesDraft });
+  };
 
   const commit = (patch) => {
     setLocal((l) => ({ ...l, ...patch }));
@@ -340,11 +361,65 @@ function TaskRow({ task: t, editable, onSave, onDelete }) {
             className="bg-transparent outline-none focus:bg-white focus:text-neutral-900 focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5 text-muted-foreground" />
         ) : <span className="text-muted-foreground">{t.target_date || '—'}</span>}
       </td>
+      <td className="px-2 py-1.5 text-center relative">
+        <button
+          onClick={() => (editable ? setNotesOpen((o) => !o) : (hasNote && setNotesOpen((o) => !o)))}
+          title={hasNote ? 'View / edit note' : (editable ? 'Add note' : 'No note')}
+          disabled={!editable && !hasNote}
+          className={`p-0.5 rounded ${hasNote ? 'text-primary' : 'text-neutral-300 hover:text-primary'} ${!editable && !hasNote ? 'opacity-40 cursor-default' : ''}`}>
+          <StickyNote className="w-4 h-4" fill={hasNote ? 'currentColor' : 'none'} />
+        </button>
+        {notesOpen && (
+          <NotesPopup
+            value={notesDraft} editable={editable}
+            onChange={setNotesDraft} onClose={() => setNotesOpen(false)} onSave={saveNotes}
+            taskName={t.name}
+          />
+        )}
+      </td>
       {editable && (
         <td className="px-2 py-1.5">
           <button onClick={() => onDelete(t)} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
         </td>
       )}
     </tr>
+  );
+}
+
+// Small notes popup anchored to the notes button. Editable users can type +
+// save; read-only users see the note text. Closes on Escape or clicking Close.
+function NotesPopup({ value, editable, onChange, onClose, onSave, taskName }) {
+  const ref = React.useRef(null);
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onClick);
+    return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('mousedown', onClick); };
+  }, [onClose]);
+
+  return (
+    <div ref={ref}
+      className="absolute right-0 top-8 z-50 w-64 bg-card border border-border rounded-lg shadow-xl p-3 text-left"
+      onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs font-semibold text-muted-foreground truncate">Note · {taskName}</span>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-3.5 h-3.5" /></button>
+      </div>
+      {editable ? (
+        <>
+          <textarea
+            value={value} onChange={(e) => onChange(e.target.value)} rows={4} autoFocus
+            placeholder="Add a note for this task…"
+            className="w-full text-sm bg-white text-neutral-900 border border-border rounded p-2 outline-none focus:ring-1 focus:ring-primary/40 resize-none" />
+          <div className="flex justify-end gap-2 mt-2">
+            <button onClick={onClose} className="text-xs px-2 py-1 rounded text-muted-foreground hover:bg-secondary">Cancel</button>
+            <button onClick={onSave} className="text-xs px-3 py-1 rounded bg-primary text-primary-foreground font-medium">Save</button>
+          </div>
+        </>
+      ) : (
+        <p className="text-sm whitespace-pre-wrap text-foreground">{value || <span className="text-muted-foreground">No note.</span>}</p>
+      )}
+    </div>
   );
 }
