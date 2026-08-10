@@ -293,7 +293,7 @@ function TaskRow({ task: t, editable, onSave, onDelete }) {
         {editable ? (
           <input value={local.name} onChange={(e) => setLocal((l) => ({ ...l, name: e.target.value }))}
             onBlur={(e) => e.target.value !== t.name && commit({ name: e.target.value })}
-            className="w-full bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5" />
+            className="w-full bg-transparent outline-none focus:bg-white focus:text-neutral-900 focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5" />
         ) : <span>{t.name}</span>}
       </td>
       <td className="px-2 py-1.5">
@@ -301,7 +301,7 @@ function TaskRow({ task: t, editable, onSave, onDelete }) {
           <input type="number" min="0" max="100" value={local.percent}
             onChange={(e) => setLocal((l) => ({ ...l, percent: e.target.value }))}
             onBlur={(e) => Number(e.target.value) !== t.percent && commit({ percent: Number(e.target.value) })}
-            className="w-16 bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5 tabular-nums" />
+            className="w-16 bg-transparent outline-none focus:bg-white focus:text-neutral-900 focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5 tabular-nums" />
         ) : <span className="tabular-nums">{t.percent}%</span>}
       </td>
       <td className="px-2 py-1.5">
@@ -309,7 +309,7 @@ function TaskRow({ task: t, editable, onSave, onDelete }) {
           <input type="number" min="0" step="0.5" value={local.weight}
             onChange={(e) => setLocal((l) => ({ ...l, weight: e.target.value }))}
             onBlur={(e) => Number(e.target.value) !== t.weight && commit({ weight: Number(e.target.value) })}
-            className="w-12 bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5 tabular-nums" />
+            className="w-12 bg-transparent outline-none focus:bg-white focus:text-neutral-900 focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5 tabular-nums" />
         ) : <span className="tabular-nums">{t.weight}</span>}
       </td>
       <td className="px-2 py-1.5">
@@ -329,14 +329,15 @@ function TaskRow({ task: t, editable, onSave, onDelete }) {
           <input value={local.assignee || ''} placeholder="—"
             onChange={(e) => setLocal((l) => ({ ...l, assignee: e.target.value }))}
             onBlur={(e) => (e.target.value || '') !== (t.assignee || '') && commit({ assignee: e.target.value })}
-            className="w-full bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5" />
+            className="w-full bg-transparent outline-none focus:bg-white focus:text-neutral-900 focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5" />
         ) : <span className="text-muted-foreground">{t.assignee || '—'}</span>}
       </td>
       <td className="px-2 py-1.5 hidden lg:table-cell">
         {editable ? (
           <input type="date" value={local.target_date || ''}
-            onChange={(e) => commit({ target_date: e.target.value })}
-            className="bg-transparent outline-none focus:bg-white focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5 text-muted-foreground" />
+            onChange={(e) => setLocal((l) => ({ ...l, target_date: e.target.value }))}
+            onBlur={(e) => (e.target.value || '') !== (t.target_date || '') && commit({ target_date: e.target.value })}
+            className="bg-transparent outline-none focus:bg-white focus:text-neutral-900 focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5 text-muted-foreground" />
         ) : <span className="text-muted-foreground">{t.target_date || '—'}</span>}
       </td>
       {editable && (
