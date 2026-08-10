@@ -184,12 +184,20 @@ const safety = {
   addRecord: (employeeId, data) => request('POST', `/safety/employees/${employeeId}/records`, { body: data }),
   updateRecord: (id, data) => request('PUT', `/safety/records/${id}`, { body: data }),
   deleteRecord: (id) => request('DELETE', `/safety/records/${id}`),
-  // Public card (no authentication required)
-  getPublicCard: async (slug) => {
-    const res = await fetch(`${API_BASE}/public/safety/card/${encodeURIComponent(slug)}`);
-    if (!res.ok) throw new Error('Not found');
-    return res.json();
-  },
+};
+
+const tracking = {
+  summary: (projectId) => request('GET', '/tracking/summary' + (projectId ? `?project=${projectId}` : '')),
+  listProjects: () => request('GET', '/tracking/projects'),
+  addProject: (name) => request('POST', '/tracking/projects', { body: { name } }),
+  updateProject: (id, data) => request('PUT', `/tracking/projects/${id}`, { body: data }),
+  deleteProject: (id) => request('DELETE', `/tracking/projects/${id}`),
+  addArea: (project_id, name) => request('POST', '/tracking/areas', { body: { project_id, name } }),
+  updateArea: (id, data) => request('PUT', `/tracking/areas/${id}`, { body: data }),
+  deleteArea: (id) => request('DELETE', `/tracking/areas/${id}`),
+  addTask: (area_id, data) => request('POST', '/tracking/tasks', { body: { area_id, ...data } }),
+  updateTask: (id, data) => request('PUT', `/tracking/tasks/${id}`, { body: data }),
+  deleteTask: (id) => request('DELETE', `/tracking/tasks/${id}`),
 };
 
 export const base44 = {
@@ -200,6 +208,7 @@ export const base44 = {
   admin,
   highlight,
   safety,
+  tracking,
   _getToken: getToken,
   _setToken: setToken,
 };

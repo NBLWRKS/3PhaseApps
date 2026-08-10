@@ -5,6 +5,7 @@ export const APPS = [
   { key: 'reports', name: 'Reports' },
   { key: 'highlight', name: 'Highlight' },
   { key: 'safety', name: 'Safety Credentials' },
+  { key: 'tracking', name: 'Project Tracking' },
   // Future apps go here, e.g. { key: 'scheduling', name: 'Scheduling' }
 ];
 

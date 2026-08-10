@@ -97,6 +97,43 @@ db.exec(`
     name TEXT NOT NULL UNIQUE,
     created_date TEXT NOT NULL
   );
+
+  -- Project Tracking: Project -> Area -> Task hierarchy.
+  CREATE TABLE IF NOT EXISTS tracking_projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    archived INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT,
+    created_date TEXT NOT NULL,
+    updated_date TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS tracking_areas (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_date TEXT NOT NULL,
+    updated_date TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS tracking_tasks (
+    id TEXT PRIMARY KEY,
+    area_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    percent INTEGER NOT NULL DEFAULT 0,   -- 0..100
+    weight REAL NOT NULL DEFAULT 1,       -- rollup weight
+    blocked INTEGER NOT NULL DEFAULT 0,   -- manual blocked flag
+    assignee TEXT,
+    target_date TEXT,                     -- optional ISO date
+    notes TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT,
+    updated_by TEXT,
+    created_date TEXT NOT NULL,
+    updated_date TEXT NOT NULL
+  );
 `);
 
 // --- Lightweight migrations for databases created before these columns
@@ -115,9 +152,6 @@ ensureColumn('highlights', 'pages', "TEXT NOT NULL DEFAULT '[]'");
 ensureColumn('highlights', 'project', 'TEXT');
 ensureColumn('highlights', 'team', 'TEXT');
 ensureColumn('highlights', 'legend', "TEXT NOT NULL DEFAULT '{}'");
-ensureColumn('training_records', 'evaluation_date', 'TEXT');
-ensureColumn('employees', 'photo_url', 'TEXT');
-ensureColumn('employees', 'position', 'TEXT');
 
 // --- Seed Safety Credentials data on first run (only if employees is empty) ---
 function slugify(name) {
@@ -156,7 +190,6 @@ const EMPLOYEE_SEED = [
 const TRAINING_TYPE_SEED = [
   'OSHA 10', 'OSHA 30', 'Forklift Certification', 'Aerial/Scissor Lift', 'Fall Protection',
   'Lockout/Tagout (LOTO)', 'First Aid / CPR', 'Confined Space', 'Arc Flash / NFPA 70E',
-  'Train the Trainer - Forklift', 'Train the Trainer - Boomlift', 'Train the Trainer - Scissorlift',
 ];
 
 const empCount = db.prepare('SELECT COUNT(*) AS c FROM employees').get().c;
@@ -190,31 +223,6 @@ if (ttCount === 0) {
   });
   seedTT();
   console.log(`[seed] inserted ${TRAINING_TYPE_SEED.length} training types`);
-}
-
-// Idempotently ensure specific training types exist, even on databases that
-// were already seeded before these were added. Safe to run every startup:
-// it only inserts names that aren't present yet (matched case-insensitively).
-const ENSURE_TRAINING_TYPES = [
-  'Train the Trainer - Forklift',
-  'Train the Trainer - Boomlift',
-  'Train the Trainer - Scissorlift',
-];
-{
-  const ts = new Date().toISOString();
-  const findByName = db.prepare('SELECT id FROM training_types WHERE name = ? COLLATE NOCASE');
-  const insTT = db.prepare('INSERT INTO training_types (id, name, created_date) VALUES (?, ?, ?)');
-  let added = 0;
-  const ensure = db.transaction(() => {
-    for (const name of ENSURE_TRAINING_TYPES) {
-      if (!findByName.get(name)) {
-        insTT.run('tt_' + Math.random().toString(36).slice(2, 10), name, ts);
-        added++;
-      }
-    }
-  });
-  ensure();
-  if (added) console.log(`[seed] added ${added} new training type(s)`);
 }
 
 export default db;

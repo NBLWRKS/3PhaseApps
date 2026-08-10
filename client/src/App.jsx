@@ -18,12 +18,17 @@ import Admin from '@/pages/Admin';
 import Highlight from '@/pages/Highlight';
 import SafetyList from '@/pages/SafetyList';
 import SafetyEmployee from '@/pages/SafetyEmployee';
-import SafetyCard from '@/pages/SafetyCard';
-import SafetyTrainingTypes from '@/pages/SafetyTrainingTypes';
-import ApplyPacket from '@/pages/ApplyPacket';
+import Tracking from '@/pages/Tracking';
 import Dashboard from '@/pages/Dashboard';
 import ReportEditor from '@/pages/ReportEditor';
 import ReportView from '@/pages/ReportView';
+
+// Redirect the capitalized /SafetyCredentials/:slug URL (from the spec) to the
+// canonical lowercase /safety/:slug route, preserving the employee slug.
+function SafetyCredentialsRedirect() {
+  const { slug } = useParams();
+  return <Navigate to={`/safety/${slug}`} replace />;
+}
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -45,11 +50,7 @@ const AuthenticatedApp = () => {
       // which avoids a redirect loop when a stored token has expired.
       const path = window.location.pathname;
       const publicPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/', '/admin'];
-      // The public credential card (/SafetyCredentials/:slug) is viewable
-      // without logging in, so it must not trigger a login redirect.
-      const isPublicCard = path.startsWith('/SafetyCredentials');
-      const isApply = path.startsWith('/apply');
-      if (!publicPaths.includes(path) && !isPublicCard && !isApply) {
+      if (!publicPaths.includes(path)) {
         navigateToLogin();
         return null;
       }
@@ -69,14 +70,11 @@ const AuthenticatedApp = () => {
       <Route path="/highlight" element={<Highlight />} />
       <Route path="/Highlight" element={<Navigate to="/highlight" replace />} />
       <Route path="/safety" element={<SafetyList />} />
-      <Route path="/safety/training-types" element={<SafetyTrainingTypes />} />
       <Route path="/safety/:slug" element={<SafetyEmployee />} />
-      {/* PUBLIC, no-login credential card at the shareable spec URL:
-          e.g. /SafetyCredentials/DayanaAballay */}
+      <Route path="/tracking" element={<Tracking />} />
+      {/* Capitalized URL form from the spec, e.g. /SafetyCredentials/DayanaAballay/ */}
       <Route path="/SafetyCredentials" element={<Navigate to="/safety" replace />} />
-      <Route path="/SafetyCredentials/:slug" element={<SafetyCard />} />
-      {/* PUBLIC new-hire application packet, no login */}
-      <Route path="/apply" element={<ApplyPacket />} />
+      <Route path="/SafetyCredentials/:slug" element={<SafetyCredentialsRedirect />} />
 
       <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
         <Route element={<AppLayout />}>
