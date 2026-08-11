@@ -9,6 +9,17 @@ const router = express.Router();
 const id = () => crypto.randomBytes(12).toString('hex');
 const now = () => new Date().toISOString();
 
+// Next sort_order for appending a new row at the bottom of its scope.
+function nextSort(table, scopeCol, scopeId) {
+  const row = db.prepare(`SELECT MAX(sort_order) AS m FROM ${table} WHERE ${scopeCol} = ?`).get(scopeId);
+  return (row && row.m != null ? row.m : -1) + 1;
+}
+// For projects (no scope column) — next across all non-archived projects.
+function nextProjectSort() {
+  const row = db.prepare('SELECT MAX(sort_order) AS m FROM tracking_projects').get();
+  return (row && row.m != null ? row.m : -1) + 1;
+}
+
 router.use(authRequired);
 router.use(appReadRequired('tracking'));
 
@@ -102,7 +113,7 @@ router.post('/projects', appEditRequired('tracking'), (req, res) => {
   if (!name) return res.status(400).json({ error: 'Name required' });
   const row = {
     id: id(), name, archived: 0,
-    sort_order: Number(req.body?.sort_order) || 0,
+    sort_order: req.body?.sort_order != null ? Number(req.body.sort_order) : nextProjectSort(),
     created_by: req.user?.email || null, created_date: now(), updated_date: now(),
   };
   db.prepare(`INSERT INTO tracking_projects (id,name,archived,sort_order,created_by,created_date,updated_date)
@@ -195,7 +206,7 @@ router.post('/areas', appEditRequired('tracking'), (req, res) => {
   if (!proj) return res.status(400).json({ error: 'Invalid project' });
   const row = {
     id: id(), project_id, name,
-    sort_order: Number(req.body?.sort_order) || 0,
+    sort_order: req.body?.sort_order != null ? Number(req.body.sort_order) : nextSort('tracking_areas', 'project_id', project_id),
     created_date: now(), updated_date: now(),
   };
   db.prepare(`INSERT INTO tracking_areas (id,project_id,name,sort_order,created_date,updated_date)
@@ -238,7 +249,7 @@ router.post('/tasks', appEditRequired('tracking'), (req, res) => {
     assignee: (req.body?.assignee || '').trim() || null,
     target_date: req.body?.target_date || null,
     notes: (req.body?.notes || '').trim() || null,
-    sort_order: Number(req.body?.sort_order) || 0,
+    sort_order: req.body?.sort_order != null ? Number(req.body.sort_order) : nextSort('tracking_tasks', 'area_id', area_id),
     created_by: req.user?.email || null, updated_by: req.user?.email || null,
     created_date: now(), updated_date: now(),
   };
@@ -270,6 +281,38 @@ router.delete('/tasks/:id', appEditRequired('tracking'), (req, res) => {
   const t = db.prepare('SELECT * FROM tracking_tasks WHERE id = ?').get(req.params.id);
   if (!t) return res.status(404).json({ error: 'Not found' });
   db.prepare('DELETE FROM tracking_tasks WHERE id = ?').run(t.id);
+  res.json({ ok: true });
+});
+
+// ===== Reorder (drag-and-drop persistence) =====
+// Each takes { ids: [...] } in the new display order and writes sort_order = index.
+function applyOrder(table, ids) {
+  const upd = db.prepare(`UPDATE ${table} SET sort_order = ?, updated_date = ? WHERE id = ?`);
+  const ts = now();
+  const tx = db.transaction((list) => {
+    list.forEach((rowId, i) => upd.run(i, ts, rowId));
+  });
+  tx(ids);
+}
+
+router.post('/projects/reorder', appEditRequired('tracking'), (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  if (!ids.length) return res.status(400).json({ error: 'ids required' });
+  applyOrder('tracking_projects', ids);
+  res.json({ ok: true });
+});
+
+router.post('/areas/reorder', appEditRequired('tracking'), (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  if (!ids.length) return res.status(400).json({ error: 'ids required' });
+  applyOrder('tracking_areas', ids);
+  res.json({ ok: true });
+});
+
+router.post('/tasks/reorder', appEditRequired('tracking'), (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+  if (!ids.length) return res.status(400).json({ error: 'ids required' });
+  applyOrder('tracking_tasks', ids);
   res.json({ ok: true });
 });
 

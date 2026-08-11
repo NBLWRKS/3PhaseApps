@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { canRead, canEdit } from '@/lib/permissions';
 import {
   Plus, Trash2, ChevronDown, ChevronRight, Loader2, BarChart3, Table2,
-  Download, Ban, FolderPlus, Layers, Copy, StickyNote, X,
+  Download, Ban, FolderPlus, Layers, Copy, StickyNote, X, GripVertical,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.jpg';
@@ -25,6 +25,67 @@ function pctColor(p) {
   if (p >= 50) return '#2C6E9B';
   if (p > 0) return '#E8B33D';
   return '#cbd5e1';
+}
+
+// Native HTML5 drag-and-drop reordering for one list. Scoped per component
+// instance, so a drag in one list can't affect another. `persist(orderedIds)`
+// is called with the new id order on drop.
+function useReorder(items, persist, editable) {
+  const [dragId, setDragId] = React.useState(null);
+  const [overId, setOverId] = React.useState(null);
+  const dragRef = React.useRef(null); // synchronous mirror of dragId
+
+  const setDrag = (id) => { dragRef.current = id; setDragId(id); };
+
+  // Props for the drop target (the row/block).
+  const dropProps = (id) => (!editable ? {} : {
+    onDragOver: (e) => {
+      if (dragRef.current == null) return;  // not our list's drag — let it bubble
+      e.preventDefault();
+      e.stopPropagation();
+      if (overId !== id) setOverId(id);
+    },
+    onDrop: (e) => {
+      if (dragRef.current == null) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const from = items.map((i) => i.id).indexOf(dragRef.current);
+      if (dragRef.current !== id) {
+        const ids = items.map((i) => i.id);
+        const to = ids.indexOf(id);
+        if (from > -1 && to > -1) {
+          ids.splice(to, 0, ids.splice(from, 1)[0]);
+          persist(ids);
+        }
+      }
+      dragRef.current = null;
+      setDragId(null);
+      setOverId(null);
+    },
+  });
+
+  // Props for the drag handle (the grip icon).
+  const handleProps = (id) => (!editable ? {} : {
+    draggable: true,
+    onDragStart: (e) => {
+      setDrag(id);
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', id); } catch { /* ignore */ }
+    },
+    onDragEnd: () => { dragRef.current = null; setDragId(null); setOverId(null); },
+  });
+
+  return { dropProps, handleProps, dragId, overId };
+}
+
+function DragHandle({ handleProps, className = '' }) {
+  return (
+    <span {...handleProps}
+      title="Drag to reorder"
+      className={`cursor-grab active:cursor-grabbing text-neutral-300 hover:text-muted-foreground ${className}`}>
+      <GripVertical className="w-4 h-4" />
+    </span>
+  );
 }
 
 export default function Tracking() {
@@ -114,6 +175,25 @@ export default function Tracking() {
     } catch { toast.error('Failed to save'); }
   };
 
+  // Optimistic reorder: reflect the new order locally, then persist.
+  const reorderProjects = async (ids) => {
+    setSummary((prev) => ids.map((id) => prev.find((p) => p.id === id)).filter(Boolean));
+    try { await base44.tracking.reorderProjects(ids); } catch { toast.error('Failed to reorder'); load(); }
+  };
+  const reorderAreas = async (projectId, ids) => {
+    setSummary((prev) => prev.map((p) => p.id !== projectId ? p
+      : { ...p, areas: ids.map((id) => p.areas.find((a) => a.id === id)).filter(Boolean) }));
+    try { await base44.tracking.reorderAreas(ids); } catch { toast.error('Failed to reorder'); load(); }
+  };
+  const reorderTasks = async (projectId, areaId, ids) => {
+    setSummary((prev) => prev.map((p) => p.id !== projectId ? p
+      : { ...p, areas: p.areas.map((a) => a.id !== areaId ? a
+        : { ...a, tasks: ids.map((id) => a.tasks.find((t) => t.id === id)).filter(Boolean) }) }));
+    try { await base44.tracking.reorderTasks(ids); } catch { toast.error('Failed to reorder'); load(); }
+  };
+
+  const projectOrder = useReorder(summary, reorderProjects, editable);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-40 bg-card border-b border-border">
@@ -181,6 +261,11 @@ export default function Tracking() {
                 onDelProject={delProject} onDelArea={delArea} onDelTask={delTask}
                 onDuplicateProject={duplicateProject}
                 onSaveTask={saveTask}
+                onReorderAreas={reorderAreas} onReorderTasks={reorderTasks}
+                dragHandleProps={projectOrder.handleProps(p.id)}
+                dropProps={projectOrder.dropProps(p.id)}
+                isDragging={projectOrder.dragId === p.id}
+                isOver={projectOrder.overId === p.id}
               />
             ))}
           </div>
@@ -201,13 +286,16 @@ function ProgressBar({ percent }) {
   );
 }
 
-function ProjectBlock({ project: p, editable, expanded, toggle, onAddArea, onAddTask, onDelProject, onDelArea, onDelTask, onSaveTask, onDuplicateProject }) {
+function ProjectBlock({ project: p, editable, expanded, toggle, onAddArea, onAddTask, onDelProject, onDelArea, onDelTask, onSaveTask, onDuplicateProject, onReorderAreas, onReorderTasks, dragHandleProps, dropProps, isDragging, isOver }) {
   const open = expanded.has(`p:${p.id}`);
   const sc = p.status_counts || {};
+  const areaOrder = useReorder(p.areas || [], (ids) => onReorderAreas(p.id, ids), editable);
   return (
-    <div className="border border-border rounded-xl bg-card overflow-hidden">
+    <div {...dropProps}
+      className={`border rounded-xl bg-card overflow-hidden transition ${isOver ? 'border-primary border-2' : 'border-border'} ${isDragging ? 'opacity-50' : ''}`}>
       {/* Project header */}
-      <div className="flex items-center gap-3 px-4 py-3 bg-secondary/40">
+      <div className="flex items-center gap-2 px-4 py-3 bg-secondary/40">
+        {editable && <DragHandle handleProps={dragHandleProps} />}
         <button onClick={() => toggle(`p:${p.id}`)} className="text-muted-foreground">
           {open ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
         </button>
@@ -234,8 +322,13 @@ function ProjectBlock({ project: p, editable, expanded, toggle, onAddArea, onAdd
             </div>
           )}
           {(p.areas || []).map((a) => (
-            <AreaBlock key={a.id} area={a} editable={editable} expanded={expanded} toggle={toggle}
-              onAddTask={onAddTask} onDelArea={onDelArea} onDelTask={onDelTask} onSaveTask={onSaveTask} />
+            <AreaBlock key={a.id} area={a} project={p} editable={editable} expanded={expanded} toggle={toggle}
+              onAddTask={onAddTask} onDelArea={onDelArea} onDelTask={onDelTask} onSaveTask={onSaveTask}
+              onReorderTasks={onReorderTasks}
+              dragHandleProps={areaOrder.handleProps(a.id)}
+              dropProps={areaOrder.dropProps(a.id)}
+              isDragging={areaOrder.dragId === a.id}
+              isOver={areaOrder.overId === a.id} />
           ))}
         </div>
       )}
@@ -243,11 +336,13 @@ function ProjectBlock({ project: p, editable, expanded, toggle, onAddArea, onAdd
   );
 }
 
-function AreaBlock({ area: a, editable, expanded, toggle, onAddTask, onDelArea, onDelTask, onSaveTask }) {
+function AreaBlock({ area: a, project, editable, expanded, toggle, onAddTask, onDelArea, onDelTask, onSaveTask, onReorderTasks, dragHandleProps, dropProps, isDragging, isOver }) {
   const open = expanded.has(`a:${a.id}`);
+  const taskOrder = useReorder(a.tasks || [], (ids) => onReorderTasks(project.id, a.id, ids), editable);
   return (
-    <div>
-      <div className="flex items-center gap-3 px-4 sm:px-6 py-2.5 bg-card">
+    <div {...dropProps} className={`transition ${isOver ? 'ring-2 ring-inset ring-primary' : ''} ${isDragging ? 'opacity-50' : ''}`}>
+      <div className="flex items-center gap-2 px-4 sm:px-6 py-2.5 bg-card">
+        {editable && <DragHandle handleProps={dragHandleProps} />}
         <button onClick={() => toggle(`a:${a.id}`)} className="text-muted-foreground">
           {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
@@ -267,6 +362,7 @@ function AreaBlock({ area: a, editable, expanded, toggle, onAddTask, onDelArea, 
           <table className="w-full text-sm">
             <thead>
               <tr className="text-xs text-muted-foreground border-y border-border bg-secondary/20">
+                {editable && <th className="w-6"></th>}
                 <th className="text-left font-medium px-4 sm:px-6 py-1.5">Task</th>
                 <th className="text-left font-medium px-2 py-1.5 w-24">%</th>
                 <th className="text-left font-medium px-2 py-1.5 w-16">Wt</th>
@@ -279,7 +375,11 @@ function AreaBlock({ area: a, editable, expanded, toggle, onAddTask, onDelArea, 
             </thead>
             <tbody>
               {a.tasks.map((t) => (
-                <TaskRow key={t.id} task={t} editable={editable} onSave={onSaveTask} onDelete={onDelTask} />
+                <TaskRow key={t.id} task={t} editable={editable} onSave={onSaveTask} onDelete={onDelTask}
+                  dragHandleProps={taskOrder.handleProps(t.id)}
+                  dropProps={taskOrder.dropProps(t.id)}
+                  isDragging={taskOrder.dragId === t.id}
+                  isOver={taskOrder.overId === t.id} />
               ))}
             </tbody>
           </table>
@@ -289,7 +389,7 @@ function AreaBlock({ area: a, editable, expanded, toggle, onAddTask, onDelArea, 
   );
 }
 
-function TaskRow({ task: t, editable, onSave, onDelete }) {
+function TaskRow({ task: t, editable, onSave, onDelete, dragHandleProps, dropProps, isDragging, isOver }) {
   const [local, setLocal] = useState(t);
   const [notesOpen, setNotesOpen] = useState(false);
   const [notesDraft, setNotesDraft] = useState(t.notes || '');
@@ -309,7 +409,13 @@ function TaskRow({ task: t, editable, onSave, onDelete }) {
   };
 
   return (
-    <tr className="border-b border-border last:border-0 hover:bg-secondary/20">
+    <tr {...dropProps}
+      className={`border-b border-border last:border-0 hover:bg-secondary/20 ${isOver ? 'border-t-2 border-t-primary' : ''} ${isDragging ? 'opacity-40' : ''}`}>
+      {editable && (
+        <td className="pl-2 w-6">
+          <DragHandle handleProps={dragHandleProps} className="inline-flex" />
+        </td>
+      )}
       <td className="px-4 sm:px-6 py-1.5">
         {editable ? (
           <input value={local.name} onChange={(e) => setLocal((l) => ({ ...l, name: e.target.value }))}
