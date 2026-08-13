@@ -166,9 +166,23 @@ async function buildCardNode(emp, logoData) {
     padding:0 ${Math.round(0.1 * PX_PER_IN)}px;`;
   const nameForCard = formatName(emp.name);
   const positionText = (emp.position || '').trim();
+  // Auto-size the name so long names (e.g. "Elder Daniel Morales Lopez") shrink
+  // to fit instead of clipping into the text below. Scales from the default down
+  // by character count and by the longest single word (which can't wrap).
+  const nameFont = (() => {
+    const base = 0.125 * PX_PER_IN;
+    const min = 0.078 * PX_PER_IN;
+    const len = nameForCard.length;
+    const longestWord = nameForCard.split(/\s+/).reduce((m, w) => Math.max(m, w.length), 0);
+    // Two constraints: total length, and the longest unbreakable word.
+    let scale = 1;
+    if (len > 16) scale = Math.min(scale, 16 / len);
+    if (longestWord > 11) scale = Math.min(scale, 11 / longestWord);
+    return Math.max(min, Math.round(base * scale));
+  })();
   tag.innerHTML = `
     <div style="font-size:${Math.round(0.06 * PX_PER_IN)}px; letter-spacing:2.2px; text-transform:uppercase; color:${VK_GOLD}; font-weight:700; margin-bottom:${Math.round(0.015 * PX_PER_IN)}px;">Employee ID</div>
-    <div style="font-size:${Math.round(0.125 * PX_PER_IN)}px; font-weight:800; line-height:1.05; color:#ffffff; letter-spacing:0.02em;">${escapeHtml(nameForCard)}</div>
+    <div style="font-size:${nameFont}px; font-weight:800; line-height:1.08; color:#ffffff; letter-spacing:0.02em;">${escapeHtml(nameForCard)}</div>
     ${positionText ? `<div style="font-size:${Math.round(0.085 * PX_PER_IN)}px; color:${VK_GOLD_BRIGHT}; margin-top:${Math.round(0.02 * PX_PER_IN)}px; letter-spacing:0.5px; text-transform:uppercase; font-weight:600;">${escapeHtml(positionText)}</div>` : ''}
     <div style="font-size:${Math.round(0.055 * PX_PER_IN)}px; color:${VK_GRAY}; margin-top:${Math.round(0.03 * PX_PER_IN)}px; letter-spacing:0.6px; text-transform:uppercase; line-height:1.3;">Electrical &amp; Mechanical<br>Field Services</div>
   `;
