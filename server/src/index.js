@@ -10,6 +10,7 @@ import functionRoutes from './routes.functions.js';
 import adminRoutes from './routes.admin.js';
 import highlightRoutes from './routes.highlight.js';
 import safetyRoutes from './routes.safety.js';
+import safetyPublicRoutes from './routes.safety-public.js';
 import trackingRoutes from './routes.tracking.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -41,6 +42,7 @@ app.use('/api/functions', functionRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/highlight', highlightRoutes);
 app.use('/api/safety', safetyRoutes);
+app.use('/api/public/safety', safetyPublicRoutes);
 app.use('/api/tracking', trackingRoutes);
 
 // Public app settings endpoint (frontend AuthContext probes this).
