@@ -150,13 +150,19 @@ export default function Tracking() {
     try { await base44.tracking.deleteProject(p.id); load(); } catch { toast.error('Failed to delete'); }
   };
   const duplicateProject = async (p) => {
+    console.log('[DUP] clicked, project:', p && p.id, p && p.name);
+    console.log('[DUP] base44.tracking exists?', !!(base44 && base44.tracking));
+    console.log('[DUP] duplicateProject is fn?', !!(base44 && base44.tracking && typeof base44.tracking.duplicateProject === 'function'));
     const name = prompt(`Duplicate "${p.name}" as a new project (structure only, progress reset to 0):`, `${p.name} (copy)`);
-    if (name === null) return; // cancelled
+    console.log('[DUP] prompt returned:', JSON.stringify(name));
+    if (name === null) { console.log('[DUP] cancelled (name is null) — returning'); return; }
     try {
-      await base44.tracking.duplicateProject(p.id, name.trim() || undefined);
+      console.log('[DUP] calling API with id=', p.id, 'name=', name.trim() || undefined);
+      const res = await base44.tracking.duplicateProject(p.id, name.trim() || undefined);
+      console.log('[DUP] API success:', res);
       toast.success('Project duplicated');
       load();
-    } catch { toast.error('Failed to duplicate'); }
+    } catch (e) { console.error('[DUP] API FAILED:', e && e.message, e); toast.error('Failed to duplicate'); }
   };
   const delArea = async (a) => {
     if (!confirm(`Delete area "${a.name}" and its tasks?`)) return;
