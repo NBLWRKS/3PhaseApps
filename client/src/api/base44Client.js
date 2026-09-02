@@ -197,12 +197,16 @@ const tracking = {
   addProject: (name) => request('POST', '/tracking/projects', { body: { name } }),
   updateProject: (id, data) => request('PUT', `/tracking/projects/${id}`, { body: data }),
   deleteProject: (id) => request('DELETE', `/tracking/projects/${id}`),
+  duplicateProject: (id, name) => request('POST', `/tracking/projects/${id}/duplicate`, { body: name ? { name } : {} }),
   addArea: (project_id, name) => request('POST', '/tracking/areas', { body: { project_id, name } }),
   updateArea: (id, data) => request('PUT', `/tracking/areas/${id}`, { body: data }),
   deleteArea: (id) => request('DELETE', `/tracking/areas/${id}`),
   addTask: (area_id, data) => request('POST', '/tracking/tasks', { body: { area_id, ...data } }),
   updateTask: (id, data) => request('PUT', `/tracking/tasks/${id}`, { body: data }),
   deleteTask: (id) => request('DELETE', `/tracking/tasks/${id}`),
+  reorderProjects: (ids) => request('POST', '/tracking/projects/reorder', { body: { ids } }),
+  reorderAreas: (ids) => request('POST', '/tracking/areas/reorder', { body: { ids } }),
+  reorderTasks: (ids) => request('POST', '/tracking/tasks/reorder', { body: { ids } }),
 };
 
 export const base44 = {
