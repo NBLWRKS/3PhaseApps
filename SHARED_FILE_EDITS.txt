@@ -1,0 +1,90 @@
+============================================================================
+EXPENSE TRACKING APP — edits to SHARED files (do these BY HAND, add the lines)
+============================================================================
+IMPORTANT: These are the "accumulator" files that every app adds to. To avoid
+dropping existing features, DO NOT replace these files wholesale — open each one
+and ADD the lines shown. Each edit is one or two lines.
+
+----------------------------------------------------------------------------
+1. server/src/db.js  — add the 4 expense tables
+----------------------------------------------------------------------------
+Open DB_TABLES_TO_ADD.sql (in this bundle) and paste those CREATE TABLE blocks
+INSIDE the existing db.exec(`... `) schema block, right after the
+tracking_tasks table, before that block's closing  `);` .
+
+----------------------------------------------------------------------------
+2. server/src/apps.js  — register the app
+----------------------------------------------------------------------------
+In the APPS array, add this line after the tracking entry:
+
+  { key: 'expenses', name: 'Expense Tracking' },
+
+----------------------------------------------------------------------------
+3. server/src/index.js  — import + mount the routes
+----------------------------------------------------------------------------
+Add the import near the other route imports:
+
+  import expenseRoutes from './routes.expenses.js';
+
+Add the mount next to the other app.use('/api/...') lines (e.g. after tracking):
+
+  app.use('/api/expenses', expenseRoutes);
+
+----------------------------------------------------------------------------
+4. client/src/api/base44Client.js  — add API methods
+----------------------------------------------------------------------------
+See EXPENSES_API_METHODS.txt in this bundle. Add the `const expenses = {...}`
+object next to the existing `const tracking = {...}`, and add `expenses,` to the
+exported base44 object.
+
+----------------------------------------------------------------------------
+5. client/src/App.jsx  — add the route
+----------------------------------------------------------------------------
+Add the import near the other page imports:
+
+  import Expenses from '@/pages/Expenses';
+
+Add the route next to the other <Route> lines (e.g. after the /tracking route):
+
+  <Route path="/expenses" element={<Expenses />} />
+
+----------------------------------------------------------------------------
+6. client/src/components/layout/AppSwitcher.jsx  — add to the app menu
+----------------------------------------------------------------------------
+In the apps array, add after the tracking entry:
+
+  { key: 'expenses', name: 'Expense Tracking', path: '/expenses' },
+
+----------------------------------------------------------------------------
+7. client/src/pages/Landing.jsx  — add a tile (optional but recommended)
+----------------------------------------------------------------------------
+Add DollarSign to the lucide-react import, then add a tile object to the APPS
+array (before the 'coming soon' tile):
+
+  {
+    key: 'expenses',
+    name: 'Expense Tracking',
+    description: 'Track spend across projects — weekly payroll (electrical & mechanical), hours, expenses, equipment rentals, and budget vs. actual with charts and CSV export.',
+    icon: DollarSign,
+    live: true,
+    path: '/expenses',
+  },
+
+----------------------------------------------------------------------------
+NEW FILES to copy in (these are brand new, safe to just drop in):
+  server/src/routes.expenses.js
+  client/src/pages/Expenses.jsx
+  client/src/components/expenses/ExpenseDashboard.jsx
+  client/src/lib/expensesExport.js
+----------------------------------------------------------------------------
+
+DEPLOY: make the edits above + copy the new files, commit, push. The API
+redeploys (creates the 4 tables on startup via CREATE TABLE IF NOT EXISTS — no
+migration). Frontend rebuilds. Hard-refresh.
+
+PERMISSIONS: after deploy, go to Admin -> each user -> set "Expense Tracking"
+to Read or Edit. (The Admin panel picks up the new app automatically from the
+registry.) Until you grant yourself Edit, you'll see data but no add buttons.
+
+NO npm install (recharts, lucide-react, sonner already present; CSV export is
+pure JS).
