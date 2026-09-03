@@ -134,6 +134,50 @@ db.exec(`
     created_date TEXT NOT NULL,
     updated_date TEXT NOT NULL
   );
+
+  -- Expense Tracking: Project -> Weekly entry -> (payroll fields + line items)
+  CREATE TABLE IF NOT EXISTS expense_projects (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    budget REAL NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT,
+    created_date TEXT NOT NULL,
+    updated_date TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS expense_weeks (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    week_ending TEXT NOT NULL,
+    elec_pay REAL NOT NULL DEFAULT 0,
+    elec_hours REAL NOT NULL DEFAULT 0,
+    mech_pay REAL NOT NULL DEFAULT 0,
+    mech_hours REAL NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_by TEXT,
+    updated_by TEXT,
+    created_date TEXT NOT NULL,
+    updated_date TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS expense_items (
+    id TEXT PRIMARY KEY,
+    week_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    description TEXT,
+    amount REAL NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_date TEXT NOT NULL,
+    updated_date TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS expense_categories (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    created_date TEXT NOT NULL
+  );
 `);
 
 // --- Lightweight migrations for databases created before these columns

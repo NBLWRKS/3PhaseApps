@@ -20,6 +20,7 @@ import SafetyList from '@/pages/SafetyList';
 import SafetyEmployee from '@/pages/SafetyEmployee';
 import SafetyCard from '@/pages/SafetyCard';
 import Tracking from '@/pages/Tracking';
+import Expenses from '@/pages/Expenses';
 import Dashboard from '@/pages/Dashboard';
 import ReportEditor from '@/pages/ReportEditor';
 import ReportView from '@/pages/ReportView';
@@ -69,6 +70,7 @@ const AuthenticatedApp = () => {
       <Route path="/safety" element={<SafetyList />} />
       <Route path="/safety/:slug" element={<SafetyEmployee />} />
       <Route path="/tracking" element={<Tracking />} />
+      <Route path="/expenses" element={<Expenses />} />
       {/* Capitalized URL form from the spec, e.g. /SafetyCredentials/DayanaAballay/ */}
       <Route path="/SafetyCredentials" element={<Navigate to="/safety" replace />} />
       <Route path="/SafetyCredentials/:slug" element={<SafetyCard />} />

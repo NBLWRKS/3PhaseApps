@@ -10,6 +10,7 @@ const APPS = [
   { key: 'highlight', name: 'Highlight', path: '/highlight' },
   { key: 'safety', name: 'Safety Credentials', path: '/safety' },
   { key: 'tracking', name: 'Project Tracking', path: '/tracking' },
+  { key: 'expenses', name: 'Expense Tracking', path: '/expenses' },
 ];
 
 // A compact dropdown that lets the user jump to another application they have

@@ -209,6 +209,22 @@ const tracking = {
   reorderTasks: (ids) => request('POST', '/tracking/tasks/reorder', { body: { ids } }),
 };
 
+const expenses = {
+  summary: (projectId) => request('GET', '/expenses/summary' + (projectId ? `?project=${projectId}` : '')),
+  listProjects: () => request('GET', '/expenses/projects'),
+  addProject: (data) => request('POST', '/expenses/projects', { body: data }),
+  updateProject: (id, data) => request('PUT', `/expenses/projects/${id}`, { body: data }),
+  deleteProject: (id) => request('DELETE', `/expenses/projects/${id}`),
+  listCategories: () => request('GET', '/expenses/categories'),
+  addCategory: (name) => request('POST', '/expenses/categories', { body: { name } }),
+  addWeek: (data) => request('POST', '/expenses/weeks', { body: data }),
+  updateWeek: (id, data) => request('PUT', `/expenses/weeks/${id}`, { body: data }),
+  deleteWeek: (id) => request('DELETE', `/expenses/weeks/${id}`),
+  addItem: (data) => request('POST', '/expenses/items', { body: data }),
+  updateItem: (id, data) => request('PUT', `/expenses/items/${id}`, { body: data }),
+  deleteItem: (id) => request('DELETE', `/expenses/items/${id}`),
+};
+
 export const base44 = {
   auth,
   entities: { Report: entity('Report'), User: entity('User') },
@@ -218,6 +234,7 @@ export const base44 = {
   highlight,
   safety,
   tracking,
+  expenses,
   _getToken: getToken,
   _setToken: setToken,
 };
