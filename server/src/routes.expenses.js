@@ -62,7 +62,25 @@ function buildSummary(projectId) {
       weekOut.push({ ...w, items, totals: t });
     }
 
-    const budget = num(p.budget);
+    // Spend per budgeted category.
+    const spendElec = elecPay;
+    const spendMech = mechPay;
+    const spendMaterials = categoryTotals['Materials'] || 0;
+    const spendRental = categoryTotals['Equipment Rental'] || 0;
+
+    // Per-category budgets (the four fixed ones); project budget = their sum.
+    const bElec = num(p.budget_elec);
+    const bMech = num(p.budget_mech);
+    const bMaterials = num(p.budget_materials);
+    const bRental = num(p.budget_rental);
+    const budgetTotal = bElec + bMech + bMaterials + bRental;
+
+    const catLine = (label, spend, budget) => ({
+      label, spend, budget,
+      remaining: budget > 0 ? budget - spend : 0,
+      pct: budget > 0 ? Math.round((spend / budget) * 100) : 0,
+    });
+
     out.push({
       ...p,
       weeks: weekOut,
@@ -75,9 +93,17 @@ function buildSummary(projectId) {
         elec_pay: elecPay, mech_pay: mechPay,
         elec_hours: elecHours, mech_hours: mechHours,
         cost_per_hour: projHours > 0 ? projTotal / projHours : 0,
-        budget,
-        budget_remaining: budget > 0 ? budget - projTotal : 0,
-        budget_pct: budget > 0 ? Math.round((projTotal / budget) * 100) : 0,
+        // overall = sum of category budgets
+        budget: budgetTotal,
+        budget_remaining: budgetTotal > 0 ? budgetTotal - projTotal : 0,
+        budget_pct: budgetTotal > 0 ? Math.round((projTotal / budgetTotal) * 100) : 0,
+      },
+      // Per-category budget vs. spend (for the BI budget bars).
+      budgets: {
+        elec: catLine('Electrical Payroll', spendElec, bElec),
+        mech: catLine('Mechanical Payroll', spendMech, bMech),
+        materials: catLine('Materials', spendMaterials, bMaterials),
+        rental: catLine('Equipment Rental', spendRental, bRental),
       },
       category_totals: categoryTotals,
       // weekly trend: [{week_ending, total}]
@@ -122,13 +148,16 @@ router.post('/projects', appEditRequired('expenses'), (req, res) => {
   const maxRow = db.prepare('SELECT MAX(sort_order) AS m FROM expense_projects').get();
   const row = {
     id: id(), name,
-    budget: num(req.body?.budget),
+    budget_elec: num(req.body?.budget_elec),
+    budget_mech: num(req.body?.budget_mech),
+    budget_materials: num(req.body?.budget_materials),
+    budget_rental: num(req.body?.budget_rental),
     archived: 0,
     sort_order: (maxRow && maxRow.m != null ? maxRow.m : -1) + 1,
     created_by: req.user?.email || null, created_date: now(), updated_date: now(),
   };
-  db.prepare(`INSERT INTO expense_projects (id,name,budget,archived,sort_order,created_by,created_date,updated_date)
-    VALUES (@id,@name,@budget,@archived,@sort_order,@created_by,@created_date,@updated_date)`).run(row);
+  db.prepare(`INSERT INTO expense_projects (id,name,budget_elec,budget_mech,budget_materials,budget_rental,archived,sort_order,created_by,created_date,updated_date)
+    VALUES (@id,@name,@budget_elec,@budget_mech,@budget_materials,@budget_rental,@archived,@sort_order,@created_by,@created_date,@updated_date)`).run(row);
   res.json(row);
 });
 
@@ -137,10 +166,13 @@ router.put('/projects/:id', appEditRequired('expenses'), (req, res) => {
   if (!p) return res.status(404).json({ error: 'Not found' });
   const b = req.body || {};
   const name = b.name != null ? String(b.name).trim() : p.name;
-  const budget = b.budget != null ? num(b.budget) : p.budget;
+  const budget_elec = b.budget_elec != null ? num(b.budget_elec) : p.budget_elec;
+  const budget_mech = b.budget_mech != null ? num(b.budget_mech) : p.budget_mech;
+  const budget_materials = b.budget_materials != null ? num(b.budget_materials) : p.budget_materials;
+  const budget_rental = b.budget_rental != null ? num(b.budget_rental) : p.budget_rental;
   const archived = b.archived != null ? (b.archived ? 1 : 0) : p.archived;
-  db.prepare('UPDATE expense_projects SET name=?, budget=?, archived=?, updated_date=? WHERE id=?')
-    .run(name, budget, archived, now(), p.id);
+  db.prepare('UPDATE expense_projects SET name=?, budget_elec=?, budget_mech=?, budget_materials=?, budget_rental=?, archived=?, updated_date=? WHERE id=?')
+    .run(name, budget_elec, budget_mech, budget_materials, budget_rental, archived, now(), p.id);
   res.json(db.prepare('SELECT * FROM expense_projects WHERE id = ?').get(p.id));
 });
 

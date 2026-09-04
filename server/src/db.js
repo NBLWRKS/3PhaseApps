@@ -139,7 +139,10 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS expense_projects (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
-    budget REAL NOT NULL DEFAULT 0,
+    budget_elec REAL NOT NULL DEFAULT 0,
+    budget_mech REAL NOT NULL DEFAULT 0,
+    budget_materials REAL NOT NULL DEFAULT 0,
+    budget_rental REAL NOT NULL DEFAULT 0,
     archived INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_by TEXT,
@@ -196,6 +199,11 @@ ensureColumn('highlights', 'pages', "TEXT NOT NULL DEFAULT '[]'");
 ensureColumn('highlights', 'project', 'TEXT');
 ensureColumn('highlights', 'team', 'TEXT');
 ensureColumn('highlights', 'legend', "TEXT NOT NULL DEFAULT '{}'");
+// Expense per-category budgets (safety net if an older expense_projects shipped first)
+ensureColumn('expense_projects', 'budget_elec', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('expense_projects', 'budget_mech', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('expense_projects', 'budget_materials', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('expense_projects', 'budget_rental', 'REAL NOT NULL DEFAULT 0');
 
 // --- Seed Safety Credentials data on first run (only if employees is empty) ---
 function slugify(name) {
