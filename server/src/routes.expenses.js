@@ -1,8 +1,10 @@
 // Expense Tracking API — Project -> Weekly entry -> payroll + expense line items.
-// Weekly buckets: each week holds electrical/mechanical payroll ($ + hours) and
-// any number of categorized expense/rental line items. Rolls up per week, per
-// project (vs. budget), and across all projects, with category + weekly-trend
-// breakdowns for the dashboard.
+// Weekly buckets. Each week holds four payroll figures ($ + hours):
+//   own Electrical, own Mechanical, Staffing Electrical, Staffing Mechanical
+// plus expense line items. Materials line items are split by trade via the
+// categories "Materials – Electrical" and "Materials – Mechanical".
+// Rolls up per week, per project (vs. per-category budgets), with category and
+// weekly-trend breakdowns for the dashboard.
 import express from 'express';
 import crypto from 'crypto';
 import db from './db.js';
@@ -16,21 +18,21 @@ const num = (v) => { const n = Number(v); return isNaN(n) ? 0 : n; };
 router.use(authRequired);
 router.use(appReadRequired('expenses'));
 
-// Base categories always available in the UI (line items). Payroll is separate.
-const BASE_CATEGORIES = ['Equipment Rental', 'Materials', 'Other'];
+// Line-item categories always available in the UI. Payroll (own + staffing) is
+// handled by dedicated week fields, not line items.
+const BASE_CATEGORIES = ['Materials – Electrical', 'Materials – Mechanical', 'Equipment Rental', 'Other'];
 
 function weekTotals(week, items) {
-  const payroll = num(week.elec_pay) + num(week.mech_pay);
+  const payroll = num(week.elec_pay) + num(week.mech_pay) + num(week.staff_elec_pay) + num(week.staff_mech_pay);
   const itemsTotal = items.reduce((s, it) => s + num(it.amount), 0);
   return {
     payroll,
     items_total: itemsTotal,
     total: payroll + itemsTotal,
-    hours: num(week.elec_hours) + num(week.mech_hours),
+    hours: num(week.elec_hours) + num(week.mech_hours) + num(week.staff_elec_hours) + num(week.staff_mech_hours),
   };
 }
 
-// Build the full expense tree for one project (or all), with rollups.
 function buildSummary(projectId) {
   const projects = projectId
     ? db.prepare('SELECT * FROM expense_projects WHERE id = ? AND archived = 0').all(projectId)
@@ -41,103 +43,91 @@ function buildSummary(projectId) {
     const weeks = db.prepare('SELECT * FROM expense_weeks WHERE project_id = ? ORDER BY week_ending ASC').all(p.id);
     const weekOut = [];
     let projTotal = 0, projPayroll = 0, projItems = 0, projHours = 0;
-    let elecPay = 0, mechPay = 0, elecHours = 0, mechHours = 0;
-    const categoryTotals = {}; // category -> $
+    let elecPay = 0, mechPay = 0, staffElecPay = 0, staffMechPay = 0;
+    const categoryTotals = {};
 
     for (const w of weeks) {
       const items = db.prepare('SELECT * FROM expense_items WHERE week_id = ? ORDER BY sort_order, created_date').all(w.id);
       const t = weekTotals(w, items);
-      projTotal += t.total;
-      projPayroll += t.payroll;
-      projItems += t.items_total;
-      projHours += t.hours;
+      projTotal += t.total; projPayroll += t.payroll; projItems += t.items_total; projHours += t.hours;
       elecPay += num(w.elec_pay); mechPay += num(w.mech_pay);
-      elecHours += num(w.elec_hours); mechHours += num(w.mech_hours);
-      // category rollup: payroll as two synthetic categories + line items
+      staffElecPay += num(w.staff_elec_pay); staffMechPay += num(w.staff_mech_pay);
+      // Category rollup: the four payroll buckets + line items by their category.
       categoryTotals['Payroll – Electrical'] = (categoryTotals['Payroll – Electrical'] || 0) + num(w.elec_pay);
       categoryTotals['Payroll – Mechanical'] = (categoryTotals['Payroll – Mechanical'] || 0) + num(w.mech_pay);
-      for (const it of items) {
-        categoryTotals[it.category] = (categoryTotals[it.category] || 0) + num(it.amount);
-      }
+      categoryTotals['Staffing – Electrical'] = (categoryTotals['Staffing – Electrical'] || 0) + num(w.staff_elec_pay);
+      categoryTotals['Staffing – Mechanical'] = (categoryTotals['Staffing – Mechanical'] || 0) + num(w.staff_mech_pay);
+      for (const it of items) categoryTotals[it.category] = (categoryTotals[it.category] || 0) + num(it.amount);
       weekOut.push({ ...w, items, totals: t });
     }
 
     // Spend per budgeted category.
-    const spendElec = elecPay;
-    const spendMech = mechPay;
-    const spendMaterials = categoryTotals['Materials'] || 0;
-    const spendRental = categoryTotals['Equipment Rental'] || 0;
+    const spend = {
+      elec: elecPay, mech: mechPay,
+      staff_elec: staffElecPay, staff_mech: staffMechPay,
+      materials_elec: categoryTotals['Materials – Electrical'] || 0,
+      materials_mech: categoryTotals['Materials – Mechanical'] || 0,
+      rental: categoryTotals['Equipment Rental'] || 0,
+    };
+    const bud = {
+      elec: num(p.budget_elec), mech: num(p.budget_mech),
+      staff_elec: num(p.budget_staff_elec), staff_mech: num(p.budget_staff_mech),
+      materials_elec: num(p.budget_materials_elec), materials_mech: num(p.budget_materials_mech),
+      rental: num(p.budget_rental),
+    };
+    const budgetTotal = Object.values(bud).reduce((s, v) => s + v, 0);
 
-    // Per-category budgets (the four fixed ones); project budget = their sum.
-    const bElec = num(p.budget_elec);
-    const bMech = num(p.budget_mech);
-    const bMaterials = num(p.budget_materials);
-    const bRental = num(p.budget_rental);
-    const budgetTotal = bElec + bMech + bMaterials + bRental;
-
-    const catLine = (label, spend, budget) => ({
-      label, spend, budget,
-      remaining: budget > 0 ? budget - spend : 0,
-      pct: budget > 0 ? Math.round((spend / budget) * 100) : 0,
-    });
+    const catLine = (label, sp, b) => ({ label, spend: sp, budget: b, remaining: b > 0 ? b - sp : 0, pct: b > 0 ? Math.round((sp / b) * 100) : 0 });
 
     out.push({
       ...p,
       weeks: weekOut,
       week_count: weekOut.length,
       totals: {
-        total: projTotal,
-        payroll: projPayroll,
-        items_total: projItems,
-        hours: projHours,
-        elec_pay: elecPay, mech_pay: mechPay,
-        elec_hours: elecHours, mech_hours: mechHours,
+        total: projTotal, payroll: projPayroll, items_total: projItems, hours: projHours,
+        elec_pay: elecPay, mech_pay: mechPay, staff_elec_pay: staffElecPay, staff_mech_pay: staffMechPay,
         cost_per_hour: projHours > 0 ? projTotal / projHours : 0,
-        // overall = sum of category budgets
         budget: budgetTotal,
         budget_remaining: budgetTotal > 0 ? budgetTotal - projTotal : 0,
         budget_pct: budgetTotal > 0 ? Math.round((projTotal / budgetTotal) * 100) : 0,
       },
-      // Per-category budget vs. spend (for the BI budget bars).
       budgets: {
-        elec: catLine('Electrical Payroll', spendElec, bElec),
-        mech: catLine('Mechanical Payroll', spendMech, bMech),
-        materials: catLine('Materials', spendMaterials, bMaterials),
-        rental: catLine('Equipment Rental', spendRental, bRental),
+        elec: catLine('Electrical Payroll', spend.elec, bud.elec),
+        mech: catLine('Mechanical Payroll', spend.mech, bud.mech),
+        staff_elec: catLine('Staffing – Electrical', spend.staff_elec, bud.staff_elec),
+        staff_mech: catLine('Staffing – Mechanical', spend.staff_mech, bud.staff_mech),
+        materials_elec: catLine('Materials – Electrical', spend.materials_elec, bud.materials_elec),
+        materials_mech: catLine('Materials – Mechanical', spend.materials_mech, bud.materials_mech),
+        rental: catLine('Equipment Rental', spend.rental, bud.rental),
       },
       category_totals: categoryTotals,
-      // weekly trend: [{week_ending, total}]
       trend: weekOut.map((w) => ({ week_ending: w.week_ending, total: w.totals.total })),
     });
   }
   return out;
 }
 
-// ===== Summary (dashboard + tables data source) =====
-router.get('/summary', (req, res) => {
-  res.json(buildSummary(req.query.project || null));
-});
+// ===== Summary =====
+router.get('/summary', (req, res) => { res.json(buildSummary(req.query.project || null)); });
 
 // ===== Categories =====
 router.get('/categories', (_req, res) => {
   const custom = db.prepare('SELECT name FROM expense_categories ORDER BY name').all().map((r) => r.name);
-  // De-dup base + custom, base first.
-  const all = [...BASE_CATEGORIES, ...custom.filter((c) => !BASE_CATEGORIES.includes(c))];
-  res.json(all);
+  res.json([...BASE_CATEGORIES, ...custom.filter((c) => !BASE_CATEGORIES.includes(c))]);
 });
-
 router.post('/categories', appEditRequired('expenses'), (req, res) => {
   const name = (req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Name required' });
-  if (BASE_CATEGORIES.includes(name)) return res.json({ ok: true }); // already available
-  const exists = db.prepare('SELECT id FROM expense_categories WHERE name = ?').get(name);
-  if (!exists) {
+  if (BASE_CATEGORIES.includes(name)) return res.json({ ok: true });
+  if (!db.prepare('SELECT id FROM expense_categories WHERE name = ?').get(name)) {
     db.prepare('INSERT INTO expense_categories (id, name, created_date) VALUES (?,?,?)').run(id(), name, now());
   }
   res.json({ ok: true, name });
 });
 
 // ===== Projects =====
+const PROJECT_BUDGET_COLS = ['budget_elec', 'budget_mech', 'budget_staff_elec', 'budget_staff_mech', 'budget_materials_elec', 'budget_materials_mech', 'budget_rental'];
+
 router.get('/projects', (_req, res) => {
   res.json(db.prepare('SELECT * FROM expense_projects WHERE archived = 0 ORDER BY sort_order, name').all());
 });
@@ -147,17 +137,13 @@ router.post('/projects', appEditRequired('expenses'), (req, res) => {
   if (!name) return res.status(400).json({ error: 'Name required' });
   const maxRow = db.prepare('SELECT MAX(sort_order) AS m FROM expense_projects').get();
   const row = {
-    id: id(), name,
-    budget_elec: num(req.body?.budget_elec),
-    budget_mech: num(req.body?.budget_mech),
-    budget_materials: num(req.body?.budget_materials),
-    budget_rental: num(req.body?.budget_rental),
-    archived: 0,
+    id: id(), name, archived: 0,
     sort_order: (maxRow && maxRow.m != null ? maxRow.m : -1) + 1,
     created_by: req.user?.email || null, created_date: now(), updated_date: now(),
   };
-  db.prepare(`INSERT INTO expense_projects (id,name,budget_elec,budget_mech,budget_materials,budget_rental,archived,sort_order,created_by,created_date,updated_date)
-    VALUES (@id,@name,@budget_elec,@budget_mech,@budget_materials,@budget_rental,@archived,@sort_order,@created_by,@created_date,@updated_date)`).run(row);
+  for (const c of PROJECT_BUDGET_COLS) row[c] = num(req.body?.[c]);
+  const cols = ['id', 'name', ...PROJECT_BUDGET_COLS, 'archived', 'sort_order', 'created_by', 'created_date', 'updated_date'];
+  db.prepare(`INSERT INTO expense_projects (${cols.join(',')}) VALUES (${cols.map((c) => '@' + c).join(',')})`).run(row);
   res.json(row);
 });
 
@@ -166,13 +152,10 @@ router.put('/projects/:id', appEditRequired('expenses'), (req, res) => {
   if (!p) return res.status(404).json({ error: 'Not found' });
   const b = req.body || {};
   const name = b.name != null ? String(b.name).trim() : p.name;
-  const budget_elec = b.budget_elec != null ? num(b.budget_elec) : p.budget_elec;
-  const budget_mech = b.budget_mech != null ? num(b.budget_mech) : p.budget_mech;
-  const budget_materials = b.budget_materials != null ? num(b.budget_materials) : p.budget_materials;
-  const budget_rental = b.budget_rental != null ? num(b.budget_rental) : p.budget_rental;
   const archived = b.archived != null ? (b.archived ? 1 : 0) : p.archived;
-  db.prepare('UPDATE expense_projects SET name=?, budget_elec=?, budget_mech=?, budget_materials=?, budget_rental=?, archived=?, updated_date=? WHERE id=?')
-    .run(name, budget_elec, budget_mech, budget_materials, budget_rental, archived, now(), p.id);
+  const vals = PROJECT_BUDGET_COLS.map((c) => (b[c] != null ? num(b[c]) : p[c]));
+  db.prepare(`UPDATE expense_projects SET name=?, ${PROJECT_BUDGET_COLS.map((c) => c + '=?').join(', ')}, archived=?, updated_date=? WHERE id=?`)
+    .run(name, ...vals, archived, now(), p.id);
   res.json(db.prepare('SELECT * FROM expense_projects WHERE id = ?').get(p.id));
 });
 
@@ -191,23 +174,26 @@ router.delete('/projects/:id', appEditRequired('expenses'), (req, res) => {
 });
 
 // ===== Weeks =====
+const WEEK_PAY_COLS = ['elec_pay', 'elec_hours', 'mech_pay', 'mech_hours', 'staff_elec_pay', 'staff_elec_hours', 'staff_mech_pay', 'staff_mech_hours'];
+
+function insertWeek(project_id, body, user) {
+  const row = {
+    id: id(), project_id, week_ending: String(body.week_ending).trim(),
+    notes: (body.notes || '').trim() || null,
+    created_by: user || null, updated_by: user || null, created_date: now(), updated_date: now(),
+  };
+  for (const c of WEEK_PAY_COLS) row[c] = num(body[c]);
+  const cols = ['id', 'project_id', 'week_ending', ...WEEK_PAY_COLS, 'notes', 'created_by', 'updated_by', 'created_date', 'updated_date'];
+  db.prepare(`INSERT INTO expense_weeks (${cols.join(',')}) VALUES (${cols.map((c) => '@' + c).join(',')})`).run(row);
+  return row;
+}
+
 router.post('/weeks', appEditRequired('expenses'), (req, res) => {
   const project_id = req.body?.project_id;
   const week_ending = (req.body?.week_ending || '').trim();
   if (!project_id || !week_ending) return res.status(400).json({ error: 'project_id and week_ending required' });
-  const proj = db.prepare('SELECT id FROM expense_projects WHERE id = ?').get(project_id);
-  if (!proj) return res.status(400).json({ error: 'Invalid project' });
-  const row = {
-    id: id(), project_id, week_ending,
-    elec_pay: num(req.body?.elec_pay), elec_hours: num(req.body?.elec_hours),
-    mech_pay: num(req.body?.mech_pay), mech_hours: num(req.body?.mech_hours),
-    notes: (req.body?.notes || '').trim() || null,
-    created_by: req.user?.email || null, updated_by: req.user?.email || null,
-    created_date: now(), updated_date: now(),
-  };
-  db.prepare(`INSERT INTO expense_weeks (id,project_id,week_ending,elec_pay,elec_hours,mech_pay,mech_hours,notes,created_by,updated_by,created_date,updated_date)
-    VALUES (@id,@project_id,@week_ending,@elec_pay,@elec_hours,@mech_pay,@mech_hours,@notes,@created_by,@updated_by,@created_date,@updated_date)`).run(row);
-  res.json(row);
+  if (!db.prepare('SELECT id FROM expense_projects WHERE id = ?').get(project_id)) return res.status(400).json({ error: 'Invalid project' });
+  res.json(insertWeek(project_id, req.body, req.user?.email));
 });
 
 router.put('/weeks/:id', appEditRequired('expenses'), (req, res) => {
@@ -215,13 +201,10 @@ router.put('/weeks/:id', appEditRequired('expenses'), (req, res) => {
   if (!w) return res.status(404).json({ error: 'Not found' });
   const b = req.body || {};
   const week_ending = b.week_ending != null ? String(b.week_ending).trim() : w.week_ending;
-  const elec_pay = b.elec_pay != null ? num(b.elec_pay) : w.elec_pay;
-  const elec_hours = b.elec_hours != null ? num(b.elec_hours) : w.elec_hours;
-  const mech_pay = b.mech_pay != null ? num(b.mech_pay) : w.mech_pay;
-  const mech_hours = b.mech_hours != null ? num(b.mech_hours) : w.mech_hours;
   const notes = b.notes != null ? (String(b.notes).trim() || null) : w.notes;
-  db.prepare(`UPDATE expense_weeks SET week_ending=?, elec_pay=?, elec_hours=?, mech_pay=?, mech_hours=?, notes=?, updated_by=?, updated_date=? WHERE id=?`)
-    .run(week_ending, elec_pay, elec_hours, mech_pay, mech_hours, notes, req.user?.email || null, now(), w.id);
+  const vals = WEEK_PAY_COLS.map((c) => (b[c] != null ? num(b[c]) : w[c]));
+  db.prepare(`UPDATE expense_weeks SET week_ending=?, ${WEEK_PAY_COLS.map((c) => c + '=?').join(', ')}, notes=?, updated_by=?, updated_date=? WHERE id=?`)
+    .run(week_ending, ...vals, notes, req.user?.email || null, now(), w.id);
   res.json(db.prepare('SELECT * FROM expense_weeks WHERE id = ?').get(w.id));
 });
 
@@ -233,13 +216,49 @@ router.delete('/weeks/:id', appEditRequired('expenses'), (req, res) => {
   res.json({ ok: true });
 });
 
+// ===== Bulk import: paste weekly totals -> create many weeks at once =====
+// Body: { project_id, rows: [{ week_ending, elec_pay, elec_hours, mech_pay,
+//   mech_hours, staff_elec_pay, staff_elec_hours, staff_mech_pay,
+//   staff_mech_hours, materials_elec, materials_mech, rental, notes }] }
+// materials_elec / materials_mech / rental become expense line items.
+router.post('/import', appEditRequired('expenses'), (req, res) => {
+  const project_id = req.body?.project_id;
+  const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+  if (!project_id) return res.status(400).json({ error: 'project_id required' });
+  if (!db.prepare('SELECT id FROM expense_projects WHERE id = ?').get(project_id)) return res.status(400).json({ error: 'Invalid project' });
+  if (!rows.length) return res.status(400).json({ error: 'No rows to import' });
+
+  const insertItem = db.prepare(`INSERT INTO expense_items (id,week_id,category,description,amount,sort_order,created_date,updated_date)
+    VALUES (@id,@week_id,@category,@description,@amount,@sort_order,@created_date,@updated_date)`);
+  let created = 0;
+  const tx = db.transaction(() => {
+    for (const r of rows) {
+      const we = (r.week_ending || '').trim();
+      if (!we) continue;
+      const week = insertWeek(project_id, r, req.user?.email);
+      created++;
+      const lineDefs = [
+        ['Materials – Electrical', r.materials_elec],
+        ['Materials – Mechanical', r.materials_mech],
+        ['Equipment Rental', r.rental],
+      ];
+      let so = 0;
+      for (const [cat, amt] of lineDefs) {
+        const a = num(amt);
+        if (a) insertItem.run({ id: id(), week_id: week.id, category: cat, description: null, amount: a, sort_order: so++, created_date: now(), updated_date: now() });
+      }
+    }
+  });
+  tx();
+  res.json({ ok: true, weeks_created: created });
+});
+
 // ===== Expense line items =====
 router.post('/items', appEditRequired('expenses'), (req, res) => {
   const week_id = req.body?.week_id;
   const category = (req.body?.category || '').trim();
   if (!week_id || !category) return res.status(400).json({ error: 'week_id and category required' });
-  const wk = db.prepare('SELECT id FROM expense_weeks WHERE id = ?').get(week_id);
-  if (!wk) return res.status(400).json({ error: 'Invalid week' });
+  if (!db.prepare('SELECT id FROM expense_weeks WHERE id = ?').get(week_id)) return res.status(400).json({ error: 'Invalid week' });
   const maxRow = db.prepare('SELECT MAX(sort_order) AS m FROM expense_items WHERE week_id = ?').get(week_id);
   const row = {
     id: id(), week_id, category,

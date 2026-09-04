@@ -42,8 +42,8 @@ export default function ExpenseDashboard({ summary }) {
 
   // Per-category budget vs spend across scope.
   const catBudgets = useMemo(() => {
-    const keys = ['elec', 'mech', 'materials', 'rental'];
-    const labels = { elec: 'Electrical Payroll', mech: 'Mechanical Payroll', materials: 'Materials', rental: 'Equipment Rental' };
+    const keys = ['elec', 'mech', 'staff_elec', 'staff_mech', 'materials_elec', 'materials_mech', 'rental'];
+    const labels = { elec: 'Electrical Payroll', mech: 'Mechanical Payroll', staff_elec: 'Staffing – Electrical', staff_mech: 'Staffing – Mechanical', materials_elec: 'Materials – Electrical', materials_mech: 'Materials – Mechanical', rental: 'Equipment Rental' };
     return keys.map((k) => {
       let spend = 0, budget = 0;
       for (const p of scoped) { const b = p.budgets?.[k]; if (b) { spend += b.spend || 0; budget += b.budget || 0; } }

@@ -141,7 +141,10 @@ db.exec(`
     name TEXT NOT NULL,
     budget_elec REAL NOT NULL DEFAULT 0,
     budget_mech REAL NOT NULL DEFAULT 0,
-    budget_materials REAL NOT NULL DEFAULT 0,
+    budget_staff_elec REAL NOT NULL DEFAULT 0,
+    budget_staff_mech REAL NOT NULL DEFAULT 0,
+    budget_materials_elec REAL NOT NULL DEFAULT 0,
+    budget_materials_mech REAL NOT NULL DEFAULT 0,
     budget_rental REAL NOT NULL DEFAULT 0,
     archived INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER NOT NULL DEFAULT 0,
@@ -158,6 +161,10 @@ db.exec(`
     elec_hours REAL NOT NULL DEFAULT 0,
     mech_pay REAL NOT NULL DEFAULT 0,
     mech_hours REAL NOT NULL DEFAULT 0,
+    staff_elec_pay REAL NOT NULL DEFAULT 0,
+    staff_elec_hours REAL NOT NULL DEFAULT 0,
+    staff_mech_pay REAL NOT NULL DEFAULT 0,
+    staff_mech_hours REAL NOT NULL DEFAULT 0,
     notes TEXT,
     created_by TEXT,
     updated_by TEXT,
@@ -202,8 +209,16 @@ ensureColumn('highlights', 'legend', "TEXT NOT NULL DEFAULT '{}'");
 // Expense per-category budgets (safety net if an older expense_projects shipped first)
 ensureColumn('expense_projects', 'budget_elec', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('expense_projects', 'budget_mech', 'REAL NOT NULL DEFAULT 0');
-ensureColumn('expense_projects', 'budget_materials', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('expense_projects', 'budget_staff_elec', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('expense_projects', 'budget_staff_mech', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('expense_projects', 'budget_materials_elec', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('expense_projects', 'budget_materials_mech', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('expense_projects', 'budget_rental', 'REAL NOT NULL DEFAULT 0');
+// Staffing payroll on weeks
+ensureColumn('expense_weeks', 'staff_elec_pay', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('expense_weeks', 'staff_elec_hours', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('expense_weeks', 'staff_mech_pay', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('expense_weeks', 'staff_mech_hours', 'REAL NOT NULL DEFAULT 0');
 
 // --- Seed Safety Credentials data on first run (only if employees is empty) ---
 function slugify(name) {

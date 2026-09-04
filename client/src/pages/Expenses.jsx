@@ -5,8 +5,8 @@ import { useAuth } from '@/lib/AuthContext';
 import { canRead, canEdit } from '@/lib/permissions';
 import {
   Plus, Trash2, ChevronDown, Loader2, LayoutDashboard, Table2,
-  Download, DollarSign, FolderPlus, CalendarPlus, Zap, Wrench, Package, Truck,
-  Clock, TrendingUp, Pencil,
+  Download, Upload, DollarSign, FolderPlus, CalendarPlus, Zap, Wrench,
+  Package, Truck, Users, Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.jpg';
@@ -23,21 +23,26 @@ function budgetColor(pct) {
   return 'hsl(160 84% 34%)';
 }
 
-const CAT_META = {
-  elec: { label: 'Electrical Payroll', icon: Zap, tint: 'hsl(208 75% 42%)' },
-  mech: { label: 'Mechanical Payroll', icon: Wrench, tint: 'hsl(160 84% 34%)' },
-  materials: { label: 'Materials', icon: Package, tint: 'hsl(38 92% 50%)' },
-  rental: { label: 'Equipment Rental', icon: Truck, tint: 'hsl(280 45% 55%)' },
-};
+// The seven budgeted categories: key, label, icon, tint.
+const BUDGET_CATS = [
+  ['elec', 'Electrical Payroll', Zap, 'hsl(208 75% 42%)'],
+  ['mech', 'Mechanical Payroll', Wrench, 'hsl(160 84% 34%)'],
+  ['staff_elec', 'Staffing – Electrical', Users, 'hsl(230 60% 55%)'],
+  ['staff_mech', 'Staffing – Mechanical', Users, 'hsl(190 65% 40%)'],
+  ['materials_elec', 'Materials – Electrical', Package, 'hsl(38 92% 50%)'],
+  ['materials_mech', 'Materials – Mechanical', Package, 'hsl(30 60% 45%)'],
+  ['rental', 'Equipment Rental', Truck, 'hsl(280 45% 55%)'],
+];
 
 export default function Expenses() {
   const { user, loading } = useAuth();
   const [view, setView] = useState('table');
   const [summary, setSummary] = useState([]);
-  const [categories, setCategories] = useState(['Equipment Rental', 'Materials', 'Other']);
+  const [categories, setCategories] = useState(['Materials – Electrical', 'Materials – Mechanical', 'Equipment Rental', 'Other']);
   const [loadingData, setLoadingData] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
   const [budgetModal, setBudgetModal] = useState(null);
+  const [importFor, setImportFor] = useState(null);
 
   const editable = canEdit(user, 'expenses');
 
@@ -48,7 +53,6 @@ export default function Expenses() {
         const list = Array.isArray(data) ? data : [];
         setSummary(list);
         if (Array.isArray(cats) && cats.length) setCategories(cats);
-        // Keep the current selection if it still exists; otherwise pick the first.
         setSelectedId((cur) => (cur && list.some((p) => p.id === cur)) ? cur : (list[0]?.id || null));
       })
       .catch(() => toast.error('Failed to load expenses'))
@@ -94,10 +98,7 @@ export default function Expenses() {
     catch { toast.error('Failed to add category'); }
   };
 
-  const grandTotal = summary.reduce((s, p) => s + (p.totals?.total || 0), 0);
-  const grandBudget = summary.reduce((s, p) => s + (p.totals?.budget || 0), 0);
-  const grandHours = summary.reduce((s, p) => s + (p.totals?.hours || 0), 0);
-  const grandPayroll = summary.reduce((s, p) => s + (p.totals?.payroll || 0), 0);
+  const selected = summary.find((x) => x.id === selectedId) || summary[0] || null;
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -115,7 +116,7 @@ export default function Expenses() {
         <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Expense Tracking</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Weekly cost tracking across projects — payroll, materials, rentals, and budget.</p>
+            <p className="text-sm text-muted-foreground mt-0.5">Weekly cost tracking — payroll, staffing, materials, rentals, and budget by project.</p>
           </div>
           <div className="flex items-center gap-2">
             {view === 'table' && summary.length > 0 && (
@@ -146,17 +147,6 @@ export default function Expenses() {
           </div>
         </div>
 
-        {summary.length > 0 && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            <KpiTile icon={DollarSign} label="Total spend" value={money(grandTotal)}
-              sub={grandBudget > 0 ? `of ${money(grandBudget)} budget` : null}
-              accent={grandBudget > 0 ? budgetColor(Math.round(grandTotal / grandBudget * 100)) : undefined} />
-            <KpiTile icon={TrendingUp} label="Total payroll" value={money(grandPayroll)} />
-            <KpiTile icon={Clock} label="Total hours" value={grandHours.toLocaleString()} />
-            <KpiTile icon={FolderPlus} label="Projects" value={summary.length} />
-          </div>
-        )}
-
         {loadingData ? (
           <div className="flex items-center gap-2 text-muted-foreground py-16 justify-center"><Loader2 className="w-5 h-5 animate-spin" /> Loading…</div>
         ) : summary.length === 0 ? (
@@ -167,38 +157,22 @@ export default function Expenses() {
           </div>
         ) : view === 'dashboard' ? (
           <ExpenseDashboard summary={summary} />
-        ) : (() => {
-          const p = summary.find((x) => x.id === selectedId) || summary[0];
-          if (!p) return null;
-          return (
-            <ProjectCard key={p.id} project={p} editable={editable} categories={categories}
-              onAddWeek={addWeek} onSaveWeek={saveWeek} onDelWeek={delWeek}
-              onAddItem={addItem} onSaveItem={saveItem} onDelItem={delItem}
-              onDelProject={delProject} onEditBudget={() => setBudgetModal(p)} onAddCategory={addCategory} />
-          );
-        })()}
+        ) : selected ? (
+          <ProjectCard project={selected} editable={editable} categories={categories}
+            onAddWeek={addWeek} onSaveWeek={saveWeek} onDelWeek={delWeek}
+            onAddItem={addItem} onSaveItem={saveItem} onDelItem={delItem}
+            onDelProject={delProject} onEditBudget={() => setBudgetModal(selected)}
+            onImport={() => setImportFor(selected)} onAddCategory={addCategory} />
+        ) : null}
       </main>
 
       {budgetModal && (
-        <BudgetModal
-          project={budgetModal === 'new' ? null : budgetModal}
-          onClose={() => setBudgetModal(null)}
-          onSaved={() => { setBudgetModal(null); load(); }}
-        />
+        <BudgetModal project={budgetModal === 'new' ? null : budgetModal}
+          onClose={() => setBudgetModal(null)} onSaved={() => { setBudgetModal(null); load(); }} />
       )}
-    </div>
-  );
-}
-
-function KpiTile({ icon: Icon, label, value, sub, accent }) {
-  return (
-    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
-        <Icon className="w-4 h-4 text-muted-foreground/60" />
-      </div>
-      <div className="text-2xl font-bold mt-1.5 tabular-nums" style={accent ? { color: accent } : undefined}>{value}</div>
-      {sub && <div className="text-xs text-muted-foreground mt-0.5">{sub}</div>}
+      {importFor && (
+        <ImportModal project={importFor} onClose={() => setImportFor(null)} onDone={() => { setImportFor(null); load(); }} />
+      )}
     </div>
   );
 }
@@ -206,42 +180,29 @@ function KpiTile({ icon: Icon, label, value, sub, accent }) {
 function BudgetModal({ project, onClose, onSaved }) {
   const isNew = !project;
   const [name, setName] = useState(project?.name || '');
-  const [b, setB] = useState({
-    budget_elec: project?.budget_elec || '',
-    budget_mech: project?.budget_mech || '',
-    budget_materials: project?.budget_materials || '',
-    budget_rental: project?.budget_rental || '',
-  });
+  const initial = {};
+  for (const [key] of BUDGET_CATS) initial['budget_' + key] = project?.['budget_' + key] || '';
+  const [b, setB] = useState(initial);
   const [saving, setSaving] = useState(false);
-  const total = num(b.budget_elec) + num(b.budget_mech) + num(b.budget_materials) + num(b.budget_rental);
+  const total = BUDGET_CATS.reduce((s, [key]) => s + num(b['budget_' + key]), 0);
 
   const save = async () => {
     if (isNew && !name.trim()) { toast.error('Enter a project name'); return; }
     setSaving(true);
     try {
-      const payload = {
-        budget_elec: num(b.budget_elec), budget_mech: num(b.budget_mech),
-        budget_materials: num(b.budget_materials), budget_rental: num(b.budget_rental),
-      };
+      const payload = {};
+      for (const [key] of BUDGET_CATS) payload['budget_' + key] = num(b['budget_' + key]);
       if (isNew) await base44.expenses.addProject({ name: name.trim(), ...payload });
       else await base44.expenses.updateProject(project.id, payload);
       onSaved();
     } catch { toast.error('Failed to save'); setSaving(false); }
   };
 
-  const fields = [
-    ['budget_elec', 'Electrical Payroll', Zap],
-    ['budget_mech', 'Mechanical Payroll', Wrench],
-    ['budget_materials', 'Materials', Package],
-    ['budget_rental', 'Equipment Rental', Truck],
-  ];
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-card border border-border shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-2xl bg-card border border-border shadow-xl p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold mb-1">{isNew ? 'New Project' : `Budget — ${project.name}`}</h2>
         <p className="text-xs text-muted-foreground mb-4">Set a budget per category. The project budget is their sum.</p>
-
         {isNew && (
           <div className="mb-4">
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Project name</label>
@@ -249,29 +210,26 @@ function BudgetModal({ project, onClose, onSaved }) {
               className="w-full mt-1 bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
         )}
-
         <div className="space-y-2.5">
-          {fields.map(([key, label, Icon]) => (
+          {BUDGET_CATS.map(([key, label, Icon, tint]) => (
             <div key={key} className="flex items-center gap-3">
-              <div className="flex items-center gap-2 flex-1">
-                <Icon className="w-4 h-4 text-muted-foreground" />
-                <span className="text-sm">{label}</span>
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <Icon className="w-4 h-4 flex-none" style={{ color: tint }} />
+                <span className="text-sm truncate">{label}</span>
               </div>
-              <div className="inline-flex items-center rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-primary/30 w-40">
+              <div className="inline-flex items-center rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-primary/30 w-36 flex-none">
                 <span className="pl-2.5 text-muted-foreground text-sm">$</span>
-                <input type="number" step="any" value={b[key]} placeholder="0"
-                  onChange={(e) => setB((s) => ({ ...s, [key]: e.target.value }))}
+                <input type="number" step="any" value={b['budget_' + key]} placeholder="0"
+                  onChange={(e) => setB((s) => ({ ...s, ['budget_' + key]: e.target.value }))}
                   className="w-full bg-transparent outline-none px-2 py-2 text-sm tabular-nums text-right" />
               </div>
             </div>
           ))}
         </div>
-
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
           <span className="text-sm text-muted-foreground">Total budget</span>
           <span className="text-lg font-bold tabular-nums">{money(total)}</span>
         </div>
-
         <div className="flex justify-end gap-2 mt-4">
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary">Cancel</button>
           <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold shadow-sm hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
@@ -283,14 +241,93 @@ function BudgetModal({ project, onClose, onSaved }) {
   );
 }
 
+// ---- Import modal: paste tab/comma separated weekly totals ----
+const IMPORT_COLS = [
+  ['week_ending', 'Week ending'], ['elec_pay', 'Elec pay'], ['elec_hours', 'Elec hrs'],
+  ['mech_pay', 'Mech pay'], ['mech_hours', 'Mech hrs'],
+  ['staff_elec_pay', 'Staff elec pay'], ['staff_elec_hours', 'Staff elec hrs'],
+  ['staff_mech_pay', 'Staff mech pay'], ['staff_mech_hours', 'Staff mech hrs'],
+  ['materials_elec', 'Materials elec'], ['materials_mech', 'Materials mech'], ['rental', 'Rental'],
+];
+
+function ImportModal({ project, onClose, onDone }) {
+  const [text, setText] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Parse pasted rows. Accepts tab (from Excel) or comma separated, one week per line.
+  const parsed = (() => {
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const rows = [];
+    for (const line of lines) {
+      const cells = line.split(/\t|,/).map((c) => c.trim());
+      if (!cells[0]) continue;
+      // skip an obvious header row
+      if (/week\s*end/i.test(cells[0])) continue;
+      const row = {};
+      IMPORT_COLS.forEach(([key], i) => { row[key] = cells[i] != null ? cells[i] : ''; });
+      rows.push(row);
+    }
+    return rows;
+  })();
+
+  const doImport = async () => {
+    if (!parsed.length) { toast.error('Nothing to import — paste some rows first'); return; }
+    setSaving(true);
+    try {
+      const r = await base44.expenses.importWeeks(project.id, parsed);
+      toast.success(`Imported ${r?.weeks_created ?? parsed.length} week(s)`);
+      onDone();
+    } catch { toast.error('Import failed'); setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="w-full max-w-2xl rounded-2xl bg-card border border-border shadow-xl p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-bold mb-1 flex items-center gap-2"><Upload className="w-5 h-5" /> Import weekly totals — {project.name}</h2>
+        <p className="text-xs text-muted-foreground mb-3">
+          Paste one week per line, columns separated by tabs (copy straight from Excel) or commas, in this order:
+        </p>
+        <div className="text-[11px] bg-secondary/50 rounded-lg px-3 py-2 mb-3 overflow-x-auto whitespace-nowrap font-mono text-muted-foreground">
+          {IMPORT_COLS.map(([, label]) => label).join('  ·  ')}
+        </div>
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={8} autoFocus
+          placeholder={`2026-04-10\t19592\t500\t14000\t420\t0\t0\t0\t0\t3500\t1500\t2000`}
+          className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono outline-none focus:ring-2 focus:ring-primary/30 resize-y" />
+        <div className="flex items-center justify-between mt-2">
+          <span className="text-xs text-muted-foreground">{parsed.length} week{parsed.length === 1 ? '' : 's'} detected</span>
+        </div>
+        {parsed.length > 0 && (
+          <div className="mt-3 rounded-lg border border-border overflow-x-auto max-h-40">
+            <table className="w-full text-[11px]">
+              <thead><tr className="bg-secondary/50 text-muted-foreground">{IMPORT_COLS.map(([, l]) => <th key={l} className="px-2 py-1 text-left font-medium whitespace-nowrap">{l}</th>)}</tr></thead>
+              <tbody>
+                {parsed.slice(0, 8).map((r, i) => (
+                  <tr key={i} className="border-t border-border">{IMPORT_COLS.map(([key]) => <td key={key} className="px-2 py-1 tabular-nums whitespace-nowrap">{r[key] || '—'}</td>)}</tr>
+                ))}
+              </tbody>
+            </table>
+            {parsed.length > 8 && <div className="text-[11px] text-muted-foreground px-2 py-1">+{parsed.length - 8} more…</div>}
+          </div>
+        )}
+        <div className="flex justify-end gap-2 mt-4">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary">Cancel</button>
+          <button onClick={doImport} disabled={saving || !parsed.length} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold shadow-sm hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />} Import {parsed.length || ''} week{parsed.length === 1 ? '' : 's'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CatBudget({ data, meta }) {
-  const Icon = meta.icon;
+  const [, label, Icon, tint] = meta;
   const pct = data.budget > 0 ? Math.min(100, data.pct) : 0;
   return (
     <div className="rounded-xl border border-border bg-background p-3">
       <div className="flex items-center gap-1.5 mb-1.5">
-        <Icon className="w-3.5 h-3.5" style={{ color: meta.tint }} />
-        <span className="text-xs font-medium text-muted-foreground">{meta.label}</span>
+        <Icon className="w-3.5 h-3.5 flex-none" style={{ color: tint }} />
+        <span className="text-xs font-medium text-muted-foreground truncate">{label}</span>
       </div>
       <div className="text-base font-bold tabular-nums">{money(data.spend || 0)}</div>
       <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-1.5">
@@ -303,7 +340,7 @@ function CatBudget({ data, meta }) {
   );
 }
 
-function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onAddCategory }) {
+function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onImport, onAddCategory }) {
   const t = p.totals || {};
   const bud = p.budgets || {};
   return (
@@ -311,7 +348,7 @@ function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, 
       <div className="flex items-center gap-3 px-5 py-4 flex-wrap">
         <div className="flex-1 min-w-[140px]">
           <div className="font-bold text-lg leading-tight">{p.name}</div>
-          <div className="text-xs text-muted-foreground mt-0.5">{p.week_count} {p.week_count === 1 ? 'week' : 'weeks'} · {t.hours || 0} hrs</div>
+          <div className="text-xs text-muted-foreground mt-0.5">{p.week_count} {p.week_count === 1 ? 'week' : 'weeks'} · {t.hours || 0} hrs · {money(t.payroll)} payroll</div>
         </div>
         <div className="text-right">
           <div className="text-xl font-bold tabular-nums">{money(t.total)}</div>
@@ -322,6 +359,7 @@ function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, 
         {editable && (
           <div className="flex items-center gap-1 ml-2">
             <button onClick={() => onAddWeek(p.id)} title="Add week" className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary transition"><CalendarPlus className="w-4 h-4" /></button>
+            <button onClick={onImport} title="Import weekly totals" className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary transition"><Upload className="w-4 h-4" /></button>
             <button onClick={onEditBudget} title="Edit budgets" className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary transition"><Pencil className="w-4 h-4" /></button>
             <button onClick={() => onDelProject(p)} title="Delete project" className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-secondary transition"><Trash2 className="w-4 h-4" /></button>
           </div>
@@ -329,23 +367,20 @@ function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, 
       </div>
 
       <div className="px-5 pb-5 space-y-4 border-t border-border pt-4">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <CatBudget data={bud.elec || {}} meta={CAT_META.elec} />
-            <CatBudget data={bud.mech || {}} meta={CAT_META.mech} />
-            <CatBudget data={bud.materials || {}} meta={CAT_META.materials} />
-            <CatBudget data={bud.rental || {}} meta={CAT_META.rental} />
-          </div>
-
-          {(p.weeks || []).length === 0 ? (
-            <div className="text-sm text-muted-foreground px-1 py-2">
-              No weeks yet.{editable && <button onClick={() => onAddWeek(p.id)} className="ml-2 text-primary hover:underline font-medium">Add a week</button>}
-            </div>
-          ) : (p.weeks || []).map((w) => (
-            <WeekCard key={w.id} week={w} editable={editable} categories={categories}
-              onSaveWeek={onSaveWeek} onDelWeek={onDelWeek}
-              onAddItem={onAddItem} onSaveItem={onSaveItem} onDelItem={onDelItem} onAddCategory={onAddCategory} />
-          ))}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {BUDGET_CATS.map((meta) => <CatBudget key={meta[0]} data={bud[meta[0]] || {}} meta={meta} />)}
         </div>
+
+        {(p.weeks || []).length === 0 ? (
+          <div className="text-sm text-muted-foreground px-1 py-2">
+            No weeks yet.{editable && <> <button onClick={() => onAddWeek(p.id)} className="ml-1 text-primary hover:underline font-medium">Add a week</button> or <button onClick={onImport} className="text-primary hover:underline font-medium">import totals</button>.</>}
+          </div>
+        ) : (p.weeks || []).map((w) => (
+          <WeekCard key={w.id} week={w} editable={editable} categories={categories}
+            onSaveWeek={onSaveWeek} onDelWeek={onDelWeek}
+            onAddItem={onAddItem} onSaveItem={onSaveItem} onDelItem={onDelItem} onAddCategory={onAddCategory} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -360,6 +395,27 @@ function NumInput({ value, onCommit, prefix, className = '' }) {
         onChange={(e) => setV(e.target.value)}
         onBlur={(e) => Number(e.target.value) !== Number(value) && onCommit(Number(e.target.value))}
         className="w-full bg-transparent outline-none px-2 py-1.5 text-sm tabular-nums" />
+    </div>
+  );
+}
+
+function PayrollBox({ label, icon: Icon, tint, pay, hours, editable, onPay, onHours }) {
+  return (
+    <div className="rounded-xl border border-border bg-card p-3">
+      <div className="flex items-center gap-1.5 mb-2">
+        <Icon className="w-4 h-4 flex-none" style={{ color: tint }} />
+        <span className="text-xs font-semibold uppercase tracking-wide truncate" style={{ color: tint }}>{label}</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[11px] text-muted-foreground">Amount</label>
+          {editable ? <NumInput value={pay} prefix="$" className="w-full mt-0.5" onCommit={onPay} /> : <div className="text-sm tabular-nums font-medium mt-0.5">{money(pay)}</div>}
+        </div>
+        <div>
+          <label className="text-[11px] text-muted-foreground">Hours</label>
+          {editable ? <NumInput value={hours} className="w-full mt-0.5" onCommit={onHours} /> : <div className="text-sm tabular-nums font-medium mt-0.5">{hours}</div>}
+        </div>
+      </div>
     </div>
   );
 }
@@ -385,13 +441,16 @@ function WeekCard({ week: w, editable, categories, onSaveWeek, onDelWeek, onAddI
       </div>
 
       <div className="p-4 space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <PayrollBox label="Electrical Payroll" icon={Zap} tint="hsl(208 75% 42%)"
-            pay={w.elec_pay} hours={w.elec_hours} editable={editable}
+        {/* Four payroll buckets */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <PayrollBox label="Electrical" icon={Zap} tint="hsl(208 75% 42%)" pay={w.elec_pay} hours={w.elec_hours} editable={editable}
             onPay={(v) => onSaveWeek(w, { elec_pay: v })} onHours={(v) => onSaveWeek(w, { elec_hours: v })} />
-          <PayrollBox label="Mechanical Payroll" icon={Wrench} tint="hsl(160 84% 34%)"
-            pay={w.mech_pay} hours={w.mech_hours} editable={editable}
+          <PayrollBox label="Mechanical" icon={Wrench} tint="hsl(160 84% 34%)" pay={w.mech_pay} hours={w.mech_hours} editable={editable}
             onPay={(v) => onSaveWeek(w, { mech_pay: v })} onHours={(v) => onSaveWeek(w, { mech_hours: v })} />
+          <PayrollBox label="Staffing Elec" icon={Users} tint="hsl(230 60% 55%)" pay={w.staff_elec_pay} hours={w.staff_elec_hours} editable={editable}
+            onPay={(v) => onSaveWeek(w, { staff_elec_pay: v })} onHours={(v) => onSaveWeek(w, { staff_elec_hours: v })} />
+          <PayrollBox label="Staffing Mech" icon={Users} tint="hsl(190 65% 40%)" pay={w.staff_mech_pay} hours={w.staff_mech_hours} editable={editable}
+            onPay={(v) => onSaveWeek(w, { staff_mech_pay: v })} onHours={(v) => onSaveWeek(w, { staff_mech_hours: v })} />
         </div>
 
         <div>
@@ -412,7 +471,7 @@ function WeekCard({ week: w, editable, categories, onSaveWeek, onDelWeek, onAddI
                 <tbody>
                   {w.items.map((it, i) => (
                     <tr key={it.id} className={`${i % 2 ? 'bg-secondary/30' : ''}`}>
-                      <td className="py-1.5 px-2 w-44">
+                      <td className="py-1.5 px-2 w-48">
                         {editable ? (
                           <select defaultValue={it.category} onChange={(e) => onSaveItem(it, { category: e.target.value })}
                             className="bg-card border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-primary/30 w-full">
@@ -444,28 +503,6 @@ function WeekCard({ week: w, editable, categories, onSaveWeek, onDelWeek, onAddI
           <span className="text-muted-foreground">Expenses <span className="font-semibold text-foreground tabular-nums">{money(t.items_total)}</span></span>
           <span className="text-muted-foreground">Hours <span className="font-semibold text-foreground tabular-nums">{t.hours}</span></span>
           <span className="text-muted-foreground">Week total <span className="font-bold text-foreground tabular-nums">{money(t.total)}</span></span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PayrollBox({ label, icon: Icon, tint, pay, hours, editable, onPay, onHours }) {
-  const m = (n) => '$' + (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
-  return (
-    <div className="rounded-xl border border-border bg-card p-3">
-      <div className="flex items-center gap-1.5 mb-2">
-        <Icon className="w-4 h-4" style={{ color: tint }} />
-        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: tint }}>{label}</span>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <div>
-          <label className="text-[11px] text-muted-foreground">Amount</label>
-          {editable ? <NumInput value={pay} prefix="$" className="w-full mt-0.5" onCommit={onPay} /> : <div className="text-sm tabular-nums font-medium mt-0.5">{m(pay)}</div>}
-        </div>
-        <div>
-          <label className="text-[11px] text-muted-foreground">Hours</label>
-          {editable ? <NumInput value={hours} className="w-full mt-0.5" onCommit={onHours} /> : <div className="text-sm tabular-nums font-medium mt-0.5">{hours}</div>}
         </div>
       </div>
     </div>

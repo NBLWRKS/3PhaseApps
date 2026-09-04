@@ -223,6 +223,7 @@ const expenses = {
   addItem: (data) => request('POST', '/expenses/items', { body: data }),
   updateItem: (id, data) => request('PUT', `/expenses/items/${id}`, { body: data }),
   deleteItem: (id) => request('DELETE', `/expenses/items/${id}`),
+  importWeeks: (project_id, rows) => request('POST', '/expenses/import', { body: { project_id, rows } }),
 };
 
 export const base44 = {
