@@ -46,8 +46,9 @@ export default function Expenses() {
 
   const editable = canEdit(user, 'expenses');
 
-  const load = useCallback(() => {
-    setLoadingData(true);
+  const load = useCallback((opts = {}) => {
+    const { silent = false } = opts;
+    if (!silent) setLoadingData(true);
     Promise.all([base44.expenses.summary(), base44.expenses.listCategories()])
       .then(([data, cats]) => {
         const list = Array.isArray(data) ? data : [];
@@ -55,9 +56,13 @@ export default function Expenses() {
         if (Array.isArray(cats) && cats.length) setCategories(cats);
         setSelectedId((cur) => (cur && list.some((p) => p.id === cur)) ? cur : (list[0]?.id || null));
       })
-      .catch(() => toast.error('Failed to load expenses'))
-      .finally(() => setLoadingData(false));
+      .catch(() => { if (!silent) toast.error('Failed to load expenses'); })
+      .finally(() => { if (!silent) setLoadingData(false); });
   }, []);
+
+  // Silent refresh — updates data + totals WITHOUT the loading spinner or any
+  // remount, so editing a field never causes a visible page refresh/flicker.
+  const refresh = useCallback(() => load({ silent: true }), [load]);
 
   useEffect(() => { if (canRead(user, 'expenses')) load(); }, [user, load]);
 
@@ -66,30 +71,30 @@ export default function Expenses() {
 
   const delProject = async (p) => {
     if (!confirm(`Delete project "${p.name}" and ALL its weeks and expenses?`)) return;
-    try { await base44.expenses.deleteProject(p.id); load(); } catch { toast.error('Failed to delete'); }
+    try { await base44.expenses.deleteProject(p.id); refresh(); } catch { toast.error('Failed to delete'); }
   };
   const addWeek = async (projectId) => {
     const wk = prompt('Week ending date (YYYY-MM-DD):', new Date().toISOString().slice(0, 10));
     if (wk === null || !wk.trim()) return;
-    try { await base44.expenses.addWeek({ project_id: projectId, week_ending: wk.trim() }); load(); }
+    try { await base44.expenses.addWeek({ project_id: projectId, week_ending: wk.trim() }); refresh(); }
     catch { toast.error('Failed to add week'); }
   };
   const saveWeek = async (w, patch) => {
-    try { await base44.expenses.updateWeek(w.id, patch); load(); } catch { toast.error('Failed to save'); }
+    try { await base44.expenses.updateWeek(w.id, patch); refresh(); } catch { toast.error('Failed to save'); }
   };
   const delWeek = async (w) => {
     if (!confirm(`Delete the week ending ${w.week_ending} and its expenses?`)) return;
-    try { await base44.expenses.deleteWeek(w.id); load(); } catch { toast.error('Failed to delete'); }
+    try { await base44.expenses.deleteWeek(w.id); refresh(); } catch { toast.error('Failed to delete'); }
   };
   const addItem = async (weekId) => {
-    try { await base44.expenses.addItem({ week_id: weekId, category: categories[0] || 'Other', amount: 0 }); load(); }
+    try { await base44.expenses.addItem({ week_id: weekId, category: categories[0] || 'Other', amount: 0 }); refresh(); }
     catch { toast.error('Failed to add expense'); }
   };
   const saveItem = async (it, patch) => {
-    try { await base44.expenses.updateItem(it.id, patch); load(); } catch { toast.error('Failed to save'); }
+    try { await base44.expenses.updateItem(it.id, patch); refresh(); } catch { toast.error('Failed to save'); }
   };
   const delItem = async (it) => {
-    try { await base44.expenses.deleteItem(it.id); load(); } catch { toast.error('Failed to delete'); }
+    try { await base44.expenses.deleteItem(it.id); refresh(); } catch { toast.error('Failed to delete'); }
   };
   const addCategory = async () => {
     const name = prompt('New expense category name:');
@@ -98,15 +103,15 @@ export default function Expenses() {
     catch { toast.error('Failed to add category'); }
   };
   const addCO = async (projectId) => {
-    try { await base44.expenses.addChangeOrder({ project_id: projectId, co_number: '', man_hours: 0, equipment_total: 0, total: 0 }); load(); }
+    try { await base44.expenses.addChangeOrder({ project_id: projectId, co_number: '', man_hours: 0, equipment_total: 0, total: 0 }); refresh(); }
     catch { toast.error('Failed to add change order'); }
   };
   const saveCO = async (co, patch) => {
-    try { await base44.expenses.updateChangeOrder(co.id, patch); load(); } catch { toast.error('Failed to save'); }
+    try { await base44.expenses.updateChangeOrder(co.id, patch); refresh(); } catch { toast.error('Failed to save'); }
   };
   const delCO = async (co) => {
     if (!confirm(`Delete change order ${co.co_number || ''}?`)) return;
-    try { await base44.expenses.deleteChangeOrder(co.id); load(); } catch { toast.error('Failed to delete'); }
+    try { await base44.expenses.deleteChangeOrder(co.id); refresh(); } catch { toast.error('Failed to delete'); }
   };
 
   const selected = summary.find((x) => x.id === selectedId) || summary[0] || null;
