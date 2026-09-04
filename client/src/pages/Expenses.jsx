@@ -6,7 +6,7 @@ import { canRead, canEdit } from '@/lib/permissions';
 import {
   Plus, Trash2, ChevronDown, Loader2, LayoutDashboard, Table2,
   Download, Upload, DollarSign, FolderPlus, CalendarPlus, Zap, Wrench,
-  Package, Truck, Users, Pencil, FileText,
+  Package, Truck, Users, Pencil, FileText, Wallet, Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.jpg';
@@ -332,6 +332,20 @@ function ImportModal({ project, onClose, onDone }) {
   );
 }
 
+function StatTile({ icon: Icon, label, value, sub, tint, value_tint }) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm relative overflow-hidden">
+      <div className="absolute right-0 top-0 h-full w-1" style={{ backgroundColor: tint }} />
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+        <Icon className="w-4 h-4" style={{ color: tint }} />
+      </div>
+      <div className="text-2xl font-bold mt-1.5 tabular-nums" style={value_tint ? { color: value_tint } : undefined}>{value}</div>
+      {sub && <div className="text-xs text-muted-foreground mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
 function CatBudget({ data, meta }) {
   const [, label, Icon, tint] = meta;
   const pct = data.budget > 0 ? Math.min(100, data.pct) : 0;
@@ -356,35 +370,52 @@ function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, 
   const t = p.totals || {};
   const bud = p.budgets || {};
   return (
-    <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-4 flex-wrap">
+    <div className="space-y-5">
+      {/* Project header + actions */}
+      <div className="flex items-center gap-3 flex-wrap">
         <div className="flex-1 min-w-[140px]">
-          <div className="font-bold text-lg leading-tight">{p.name}</div>
-          <div className="text-xs text-muted-foreground mt-0.5">{p.week_count} {p.week_count === 1 ? 'week' : 'weeks'} · {t.hours || 0} hrs · {money(t.payroll)} payroll</div>
-        </div>
-        <div className="text-right">
-          <div className="text-xl font-bold tabular-nums">{money(t.total)}</div>
-          <div className="text-xs text-muted-foreground">
-            {t.budget > 0 ? <>of {money(t.budget)} · <span style={{ color: budgetColor(t.budget_pct) }} className="font-semibold">{t.budget_pct}%</span></> : 'no budget'}
-          </div>
+          <h2 className="font-bold text-xl leading-tight">{p.name}</h2>
+          <div className="text-xs text-muted-foreground mt-0.5">{p.week_count} {p.week_count === 1 ? 'week' : 'weeks'} logged</div>
         </div>
         {editable && (
-          <div className="flex items-center gap-1 ml-2">
-            <button onClick={() => onAddWeek(p.id)} title="Add week" className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary transition"><CalendarPlus className="w-4 h-4" /></button>
-            <button onClick={onImport} title="Import weekly totals" className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary transition"><Upload className="w-4 h-4" /></button>
-            <button onClick={onEditBudget} title="Edit budgets" className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary transition"><Pencil className="w-4 h-4" /></button>
-            <button onClick={() => onDelProject(p)} title="Delete project" className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-secondary transition"><Trash2 className="w-4 h-4" /></button>
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => onAddWeek(p.id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition"><CalendarPlus className="w-4 h-4" /> Week</button>
+            <button onClick={onImport} title="Import weekly totals" className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-primary hover:bg-secondary transition"><Upload className="w-4 h-4" /></button>
+            <button onClick={onEditBudget} title="Edit budgets" className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-primary hover:bg-secondary transition"><Pencil className="w-4 h-4" /></button>
+            <button onClick={() => onDelProject(p)} title="Delete project" className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-destructive hover:bg-secondary transition"><Trash2 className="w-4 h-4" /></button>
           </div>
         )}
       </div>
 
-      <div className="px-5 pb-5 space-y-4 border-t border-border pt-4">
+      {/* KPI stat tiles */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatTile icon={DollarSign} label="Total spend" value={money(t.total)}
+          sub={t.budget > 0 ? `of ${money(t.budget)} budget` : 'no budget set'} tint="hsl(208 75% 55%)" />
+        <StatTile icon={Wallet} label="Budget used" value={t.budget > 0 ? `${t.budget_pct}%` : '—'}
+          sub={t.budget > 0 ? `${money(t.budget_remaining)} remaining` : 'set budgets to track'}
+          tint={t.budget > 0 ? budgetColor(t.budget_pct) : 'hsl(var(--muted-foreground))'}
+          value_tint={t.budget > 0 ? budgetColor(t.budget_pct) : undefined} />
+        <StatTile icon={Clock} label="Man hours" value={(t.hours || 0).toLocaleString()} sub="own crew + staffing" tint="hsl(38 92% 55%)" />
+        <StatTile icon={Users} label="Payroll" value={money(t.payroll)} sub="own + staffing" tint="hsl(160 84% 42%)" />
+      </div>
+
+      {/* Budget vs. actual — distinct lighter panel */}
+      <div className="rounded-2xl border border-border bg-secondary/40 p-4 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold flex items-center gap-1.5"><Wallet className="w-4 h-4 text-muted-foreground" /> Budget vs. Actual</h3>
+          {editable && <button onClick={onEditBudget} className="text-xs text-primary hover:underline font-medium">Edit budgets</button>}
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {BUDGET_CATS.map((meta) => <CatBudget key={meta[0]} data={bud[meta[0]] || {}} meta={meta} />)}
         </div>
+      </div>
 
+      {/* Weekly entry */}
+      <div>
+        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5"><CalendarPlus className="w-4 h-4" /> Weekly Entry</h3>
+        <div className="space-y-4">
         {(p.weeks || []).length === 0 ? (
-          <div className="text-sm text-muted-foreground px-1 py-2">
+          <div className="text-sm text-muted-foreground px-1 py-2 rounded-xl border border-dashed border-border bg-card/40 text-center">
             No weeks yet.{editable && <> <button onClick={() => onAddWeek(p.id)} className="ml-1 text-primary hover:underline font-medium">Add a week</button> or <button onClick={onImport} className="text-primary hover:underline font-medium">import totals</button>.</>}
           </div>
         ) : (p.weeks || []).map((w) => (
@@ -392,9 +423,10 @@ function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, 
             onSaveWeek={onSaveWeek} onDelWeek={onDelWeek}
             onAddItem={onAddItem} onSaveItem={onSaveItem} onDelItem={onDelItem} onAddCategory={onAddCategory} />
         ))}
-
-        <ChangeOrders project={p} editable={editable} onAddCO={onAddCO} onSaveCO={onSaveCO} onDelCO={onDelCO} />
+        </div>
       </div>
+
+      <ChangeOrders project={p} editable={editable} onAddCO={onAddCO} onSaveCO={onSaveCO} onDelCO={onDelCO} />
     </div>
   );
 }
