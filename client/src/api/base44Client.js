@@ -224,6 +224,9 @@ const expenses = {
   updateItem: (id, data) => request('PUT', `/expenses/items/${id}`, { body: data }),
   deleteItem: (id) => request('DELETE', `/expenses/items/${id}`),
   importWeeks: (project_id, rows) => request('POST', '/expenses/import', { body: { project_id, rows } }),
+  addChangeOrder: (data) => request('POST', '/expenses/change-orders', { body: data }),
+  updateChangeOrder: (id, data) => request('PUT', `/expenses/change-orders/${id}`, { body: data }),
+  deleteChangeOrder: (id) => request('DELETE', `/expenses/change-orders/${id}`),
 };
 
 export const base44 = {

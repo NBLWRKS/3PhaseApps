@@ -83,6 +83,16 @@ function buildSummary(projectId) {
       ...p,
       weeks: weekOut,
       week_count: weekOut.length,
+      change_orders: (() => {
+        const cos = db.prepare('SELECT * FROM expense_change_orders WHERE project_id = ? ORDER BY sort_order, co_date').all(p.id);
+        const co_totals = {
+          count: cos.length,
+          man_hours: cos.reduce((s, c) => s + num(c.man_hours), 0),
+          equipment_total: cos.reduce((s, c) => s + num(c.equipment_total), 0),
+          total: cos.reduce((s, c) => s + num(c.total), 0),
+        };
+        return { list: cos, totals: co_totals };
+      })(),
       totals: {
         total: projTotal, payroll: projPayroll, items_total: projItems, hours: projHours,
         elec_pay: elecPay, mech_pay: mechPay, staff_elec_pay: staffElecPay, staff_mech_pay: staffMechPay,
@@ -288,6 +298,53 @@ router.delete('/items/:id', appEditRequired('expenses'), (req, res) => {
   const it = db.prepare('SELECT * FROM expense_items WHERE id = ?').get(req.params.id);
   if (!it) return res.status(404).json({ error: 'Not found' });
   db.prepare('DELETE FROM expense_items WHERE id = ?').run(it.id);
+  res.json({ ok: true });
+});
+
+// ===== Change Orders (tracked separately, per project) =====
+const CO_COLS = ['co_number', 'co_date', 'man_hours', 'equipment_total', 'total', 'notes'];
+
+router.post('/change-orders', appEditRequired('expenses'), (req, res) => {
+  const project_id = req.body?.project_id;
+  if (!project_id) return res.status(400).json({ error: 'project_id required' });
+  if (!db.prepare('SELECT id FROM expense_projects WHERE id = ?').get(project_id)) return res.status(400).json({ error: 'Invalid project' });
+  const maxRow = db.prepare('SELECT MAX(sort_order) AS m FROM expense_change_orders WHERE project_id = ?').get(project_id);
+  const row = {
+    id: id(), project_id,
+    co_number: (req.body?.co_number || '').trim() || null,
+    co_date: req.body?.co_date || null,
+    man_hours: num(req.body?.man_hours),
+    equipment_total: num(req.body?.equipment_total),
+    total: num(req.body?.total),
+    notes: (req.body?.notes || '').trim() || null,
+    sort_order: (maxRow && maxRow.m != null ? maxRow.m : -1) + 1,
+    created_by: req.user?.email || null, updated_by: req.user?.email || null,
+    created_date: now(), updated_date: now(),
+  };
+  const cols = ['id', 'project_id', ...CO_COLS, 'sort_order', 'created_by', 'updated_by', 'created_date', 'updated_date'];
+  db.prepare(`INSERT INTO expense_change_orders (${cols.join(',')}) VALUES (${cols.map((c) => '@' + c).join(',')})`).run(row);
+  res.json(row);
+});
+
+router.put('/change-orders/:id', appEditRequired('expenses'), (req, res) => {
+  const co = db.prepare('SELECT * FROM expense_change_orders WHERE id = ?').get(req.params.id);
+  if (!co) return res.status(404).json({ error: 'Not found' });
+  const b = req.body || {};
+  const co_number = b.co_number != null ? (String(b.co_number).trim() || null) : co.co_number;
+  const co_date = b.co_date !== undefined ? (b.co_date || null) : co.co_date;
+  const man_hours = b.man_hours != null ? num(b.man_hours) : co.man_hours;
+  const equipment_total = b.equipment_total != null ? num(b.equipment_total) : co.equipment_total;
+  const total = b.total != null ? num(b.total) : co.total;
+  const notes = b.notes != null ? (String(b.notes).trim() || null) : co.notes;
+  db.prepare('UPDATE expense_change_orders SET co_number=?, co_date=?, man_hours=?, equipment_total=?, total=?, notes=?, updated_by=?, updated_date=? WHERE id=?')
+    .run(co_number, co_date, man_hours, equipment_total, total, notes, req.user?.email || null, now(), co.id);
+  res.json(db.prepare('SELECT * FROM expense_change_orders WHERE id = ?').get(co.id));
+});
+
+router.delete('/change-orders/:id', appEditRequired('expenses'), (req, res) => {
+  const co = db.prepare('SELECT * FROM expense_change_orders WHERE id = ?').get(req.params.id);
+  if (!co) return res.status(404).json({ error: 'Not found' });
+  db.prepare('DELETE FROM expense_change_orders WHERE id = ?').run(co.id);
   res.json({ ok: true });
 });
 

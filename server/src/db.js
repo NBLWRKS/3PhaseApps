@@ -188,6 +188,23 @@ db.exec(`
     name TEXT NOT NULL UNIQUE,
     created_date TEXT NOT NULL
   );
+
+  -- Change Orders — tracked SEPARATELY per project (not part of weekly spend).
+  CREATE TABLE IF NOT EXISTS expense_change_orders (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    co_number TEXT,
+    co_date TEXT,
+    man_hours REAL NOT NULL DEFAULT 0,
+    equipment_total REAL NOT NULL DEFAULT 0,
+    total REAL NOT NULL DEFAULT 0,
+    notes TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT,
+    updated_by TEXT,
+    created_date TEXT NOT NULL,
+    updated_date TEXT NOT NULL
+  );
 `);
 
 // --- Lightweight migrations for databases created before these columns

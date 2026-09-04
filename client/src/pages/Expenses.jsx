@@ -6,7 +6,7 @@ import { canRead, canEdit } from '@/lib/permissions';
 import {
   Plus, Trash2, ChevronDown, Loader2, LayoutDashboard, Table2,
   Download, Upload, DollarSign, FolderPlus, CalendarPlus, Zap, Wrench,
-  Package, Truck, Users, Pencil,
+  Package, Truck, Users, Pencil, FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.jpg';
@@ -97,6 +97,17 @@ export default function Expenses() {
     try { const r = await base44.expenses.addCategory(name.trim()); if (r?.name) setCategories((c) => [...c, r.name]); }
     catch { toast.error('Failed to add category'); }
   };
+  const addCO = async (projectId) => {
+    try { await base44.expenses.addChangeOrder({ project_id: projectId, co_number: '', man_hours: 0, equipment_total: 0, total: 0 }); load(); }
+    catch { toast.error('Failed to add change order'); }
+  };
+  const saveCO = async (co, patch) => {
+    try { await base44.expenses.updateChangeOrder(co.id, patch); load(); } catch { toast.error('Failed to save'); }
+  };
+  const delCO = async (co) => {
+    if (!confirm(`Delete change order ${co.co_number || ''}?`)) return;
+    try { await base44.expenses.deleteChangeOrder(co.id); load(); } catch { toast.error('Failed to delete'); }
+  };
 
   const selected = summary.find((x) => x.id === selectedId) || summary[0] || null;
 
@@ -162,7 +173,8 @@ export default function Expenses() {
             onAddWeek={addWeek} onSaveWeek={saveWeek} onDelWeek={delWeek}
             onAddItem={addItem} onSaveItem={saveItem} onDelItem={delItem}
             onDelProject={delProject} onEditBudget={() => setBudgetModal(selected)}
-            onImport={() => setImportFor(selected)} onAddCategory={addCategory} />
+            onImport={() => setImportFor(selected)} onAddCategory={addCategory}
+            onAddCO={addCO} onSaveCO={saveCO} onDelCO={delCO} />
         ) : null}
       </main>
 
@@ -340,7 +352,7 @@ function CatBudget({ data, meta }) {
   );
 }
 
-function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onImport, onAddCategory }) {
+function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onImport, onAddCategory, onAddCO, onSaveCO, onDelCO }) {
   const t = p.totals || {};
   const bud = p.budgets || {};
   return (
@@ -380,7 +392,75 @@ function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, 
             onSaveWeek={onSaveWeek} onDelWeek={onDelWeek}
             onAddItem={onAddItem} onSaveItem={onSaveItem} onDelItem={onDelItem} onAddCategory={onAddCategory} />
         ))}
+
+        <ChangeOrders project={p} editable={editable} onAddCO={onAddCO} onSaveCO={onSaveCO} onDelCO={onDelCO} />
       </div>
+    </div>
+  );
+}
+
+function ChangeOrders({ project: p, editable, onAddCO, onSaveCO, onDelCO }) {
+  const co = p.change_orders || { list: [], totals: {} };
+  const t = co.totals || {};
+  return (
+    <div className="rounded-xl border border-border bg-background overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 bg-secondary/50 gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <FileText className="w-4 h-4 text-muted-foreground" />
+          <span className="text-sm font-semibold">Change Orders</span>
+          <span className="text-xs text-muted-foreground">(tracked separately from project spend)</span>
+        </div>
+        <div className="flex items-center gap-4 text-xs">
+          <span className="text-muted-foreground">Man hrs <span className="font-semibold text-foreground tabular-nums">{t.man_hours || 0}</span></span>
+          <span className="text-muted-foreground">Equipment <span className="font-semibold text-foreground tabular-nums">{money(t.equipment_total)}</span></span>
+          <span className="text-muted-foreground">Total <span className="font-bold text-foreground tabular-nums">{money(t.total)}</span></span>
+          {editable && <button onClick={() => onAddCO(p.id)} className="text-primary hover:underline font-medium flex items-center gap-0.5"><Plus className="w-3 h-3" /> Add CO</button>}
+        </div>
+      </div>
+      {co.list.length === 0 ? (
+        <div className="text-xs text-muted-foreground px-4 py-2">No change orders.{editable && <button onClick={() => onAddCO(p.id)} className="ml-1 text-primary hover:underline">Add one</button>}</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted-foreground border-b border-border bg-secondary/20">
+                <th className="text-left font-medium px-3 py-1.5 w-40">CO # / Name</th>
+                <th className="text-left font-medium px-2 py-1.5 w-36">Date</th>
+                <th className="text-left font-medium px-2 py-1.5 w-24">Man hrs</th>
+                <th className="text-left font-medium px-2 py-1.5 w-32">Equipment $</th>
+                <th className="text-left font-medium px-2 py-1.5 w-32">Total $</th>
+                {editable && <th className="w-9"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {co.list.map((c, i) => (
+                <tr key={c.id} className={`${i % 2 ? 'bg-secondary/30' : ''}`}>
+                  <td className="px-3 py-1.5">
+                    {editable ? <input defaultValue={c.co_number || ''} placeholder="CO #"
+                      onBlur={(e) => (e.target.value || '') !== (c.co_number || '') && onSaveCO(c, { co_number: e.target.value })}
+                      className="w-full bg-card border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-primary/30" /> : <span className="font-medium">{c.co_number || '—'}</span>}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    {editable ? <input type="date" defaultValue={c.co_date || ''}
+                      onBlur={(e) => (e.target.value || '') !== (c.co_date || '') && onSaveCO(c, { co_date: e.target.value })}
+                      className="bg-card border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-primary/30" /> : <span>{c.co_date || '—'}</span>}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    {editable ? <NumInput value={c.man_hours} onCommit={(v) => onSaveCO(c, { man_hours: v })} /> : <span className="tabular-nums">{c.man_hours}</span>}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    {editable ? <NumInput value={c.equipment_total} prefix="$" onCommit={(v) => onSaveCO(c, { equipment_total: v })} /> : <span className="tabular-nums">{money(c.equipment_total)}</span>}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    {editable ? <NumInput value={c.total} prefix="$" onCommit={(v) => onSaveCO(c, { total: v })} /> : <span className="tabular-nums font-medium">{money(c.total)}</span>}
+                  </td>
+                  {editable && <td className="pr-2 text-right"><button onClick={() => onDelCO(c)} className="text-muted-foreground hover:text-destructive transition"><Trash2 className="w-3.5 h-3.5" /></button></td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -503,6 +583,16 @@ function WeekCard({ week: w, editable, categories, onSaveWeek, onDelWeek, onAddI
           <span className="text-muted-foreground">Expenses <span className="font-semibold text-foreground tabular-nums">{money(t.items_total)}</span></span>
           <span className="text-muted-foreground">Hours <span className="font-semibold text-foreground tabular-nums">{t.hours}</span></span>
           <span className="text-muted-foreground">Week total <span className="font-bold text-foreground tabular-nums">{money(t.total)}</span></span>
+        </div>
+
+        {/* Weekly notes */}
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes</label>
+          {editable ? (
+            <textarea defaultValue={w.notes || ''} rows={2} placeholder="Notes for this week…"
+              onBlur={(e) => (e.target.value || '') !== (w.notes || '') && onSaveWeek(w, { notes: e.target.value })}
+              className="w-full mt-1 bg-card border border-border rounded-lg px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-primary/30 resize-y" />
+          ) : (w.notes ? <p className="text-sm mt-1 whitespace-pre-wrap">{w.notes}</p> : <p className="text-sm mt-1 text-muted-foreground">—</p>)}
         </div>
       </div>
     </div>
