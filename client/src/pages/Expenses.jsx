@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { canRead, canEdit } from '@/lib/permissions';
 import {
-  Plus, Trash2, ChevronDown, ChevronRight, Loader2, LayoutDashboard, Table2,
+  Plus, Trash2, ChevronDown, Loader2, LayoutDashboard, Table2,
   Download, DollarSign, FolderPlus, CalendarPlus, Zap, Wrench, Package, Truck,
   Clock, TrendingUp, Pencil,
 } from 'lucide-react';
@@ -36,7 +36,7 @@ export default function Expenses() {
   const [summary, setSummary] = useState([]);
   const [categories, setCategories] = useState(['Equipment Rental', 'Materials', 'Other']);
   const [loadingData, setLoadingData] = useState(true);
-  const [expanded, setExpanded] = useState(() => new Set());
+  const [selectedId, setSelectedId] = useState(null);
   const [budgetModal, setBudgetModal] = useState(null);
 
   const editable = canEdit(user, 'expenses');
@@ -45,14 +45,11 @@ export default function Expenses() {
     setLoadingData(true);
     Promise.all([base44.expenses.summary(), base44.expenses.listCategories()])
       .then(([data, cats]) => {
-        setSummary(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+        setSummary(list);
         if (Array.isArray(cats) && cats.length) setCategories(cats);
-        setExpanded((prev) => {
-          if (prev.size > 0) return prev;
-          const s = new Set();
-          for (const p of data || []) s.add(`p:${p.id}`);
-          return s;
-        });
+        // Keep the current selection if it still exists; otherwise pick the first.
+        setSelectedId((cur) => (cur && list.some((p) => p.id === cur)) ? cur : (list[0]?.id || null));
       })
       .catch(() => toast.error('Failed to load expenses'))
       .finally(() => setLoadingData(false));
@@ -62,10 +59,6 @@ export default function Expenses() {
 
   if (loading) return null;
   if (!canRead(user, 'expenses')) return <Navigate to="/" replace />;
-
-  const toggle = (key) => setExpanded((prev) => {
-    const s = new Set(prev); s.has(key) ? s.delete(key) : s.add(key); return s;
-  });
 
   const delProject = async (p) => {
     if (!confirm(`Delete project "${p.name}" and ALL its weeks and expenses?`)) return;
@@ -125,6 +118,15 @@ export default function Expenses() {
             <p className="text-sm text-muted-foreground mt-0.5">Weekly cost tracking across projects — payroll, materials, rentals, and budget.</p>
           </div>
           <div className="flex items-center gap-2">
+            {view === 'table' && summary.length > 0 && (
+              <div className="relative">
+                <select value={selectedId || ''} onChange={(e) => setSelectedId(e.target.value)}
+                  className="appearance-none rounded-lg border border-border bg-card pl-3 pr-8 py-1.5 text-sm font-medium outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer hover:bg-secondary transition">
+                  {summary.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <ChevronDown className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground" />
+              </div>
+            )}
             <div className="inline-flex rounded-lg border border-border overflow-hidden bg-card">
               <button onClick={() => setView('table')} className={`flex items-center gap-1.5 px-3.5 py-1.5 text-sm font-medium transition ${view === 'table' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}>
                 <Table2 className="w-4 h-4" /> Entry
@@ -165,17 +167,16 @@ export default function Expenses() {
           </div>
         ) : view === 'dashboard' ? (
           <ExpenseDashboard summary={summary} />
-        ) : (
-          <div className="space-y-4">
-            {summary.map((p) => (
-              <ProjectCard key={p.id} project={p} editable={editable} categories={categories}
-                expanded={expanded} toggle={toggle}
-                onAddWeek={addWeek} onSaveWeek={saveWeek} onDelWeek={delWeek}
-                onAddItem={addItem} onSaveItem={saveItem} onDelItem={delItem}
-                onDelProject={delProject} onEditBudget={() => setBudgetModal(p)} onAddCategory={addCategory} />
-            ))}
-          </div>
-        )}
+        ) : (() => {
+          const p = summary.find((x) => x.id === selectedId) || summary[0];
+          if (!p) return null;
+          return (
+            <ProjectCard key={p.id} project={p} editable={editable} categories={categories}
+              onAddWeek={addWeek} onSaveWeek={saveWeek} onDelWeek={delWeek}
+              onAddItem={addItem} onSaveItem={saveItem} onDelItem={delItem}
+              onDelProject={delProject} onEditBudget={() => setBudgetModal(p)} onAddCategory={addCategory} />
+          );
+        })()}
       </main>
 
       {budgetModal && (
@@ -302,16 +303,12 @@ function CatBudget({ data, meta }) {
   );
 }
 
-function ProjectCard({ project: p, editable, categories, expanded, toggle, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onAddCategory }) {
-  const open = expanded.has(`p:${p.id}`);
+function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onAddCategory }) {
   const t = p.totals || {};
   const bud = p.budgets || {};
   return (
     <div className="rounded-2xl border border-border bg-card shadow-sm overflow-hidden">
       <div className="flex items-center gap-3 px-5 py-4 flex-wrap">
-        <button onClick={() => toggle(`p:${p.id}`)} className="text-muted-foreground hover:text-foreground transition">
-          {open ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-        </button>
         <div className="flex-1 min-w-[140px]">
           <div className="font-bold text-lg leading-tight">{p.name}</div>
           <div className="text-xs text-muted-foreground mt-0.5">{p.week_count} {p.week_count === 1 ? 'week' : 'weeks'} · {t.hours || 0} hrs</div>
@@ -331,8 +328,7 @@ function ProjectCard({ project: p, editable, categories, expanded, toggle, onAdd
         )}
       </div>
 
-      {open && (
-        <div className="px-5 pb-5 space-y-4 border-t border-border pt-4">
+      <div className="px-5 pb-5 space-y-4 border-t border-border pt-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <CatBudget data={bud.elec || {}} meta={CAT_META.elec} />
             <CatBudget data={bud.mech || {}} meta={CAT_META.mech} />
@@ -350,7 +346,6 @@ function ProjectCard({ project: p, editable, categories, expanded, toggle, onAdd
               onAddItem={onAddItem} onSaveItem={onSaveItem} onDelItem={onDelItem} onAddCategory={onAddCategory} />
           ))}
         </div>
-      )}
     </div>
   );
 }
