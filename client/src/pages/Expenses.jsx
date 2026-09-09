@@ -32,6 +32,7 @@ const BUDGET_CATS = [
   ['materials_elec', 'Materials – Electrical', Package, 'hsl(38 92% 50%)'],
   ['materials_mech', 'Materials – Mechanical', Package, 'hsl(30 60% 45%)'],
   ['rental', 'Equipment Rental', Truck, 'hsl(280 45% 55%)'],
+  ['other', 'Other', FileText, 'hsl(0 0% 55%)'],
 ];
 
 export default function Expenses() {
@@ -209,18 +210,14 @@ export default function Expenses() {
 function BudgetModal({ project, onClose, onSaved }) {
   const isNew = !project;
   const [name, setName] = useState(project?.name || '');
-  const initial = {};
-  for (const [key] of BUDGET_CATS) initial['budget_' + key] = project?.['budget_' + key] || '';
-  const [b, setB] = useState(initial);
+  const [budget, setBudget] = useState(project?.budget_total || '');
   const [saving, setSaving] = useState(false);
-  const total = BUDGET_CATS.reduce((s, [key]) => s + num(b['budget_' + key]), 0);
 
   const save = async () => {
     if (isNew && !name.trim()) { toast.error('Enter a project name'); return; }
     setSaving(true);
     try {
-      const payload = {};
-      for (const [key] of BUDGET_CATS) payload['budget_' + key] = num(b['budget_' + key]);
+      const payload = { budget_total: num(budget) };
       if (isNew) await base44.expenses.addProject({ name: name.trim(), ...payload });
       else await base44.expenses.updateProject(project.id, payload);
       onSaved();
@@ -229,9 +226,9 @@ function BudgetModal({ project, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-card border border-border shadow-xl p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-md rounded-2xl bg-card border border-border shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold mb-1">{isNew ? 'New Project' : `Budget — ${project.name}`}</h2>
-        <p className="text-xs text-muted-foreground mb-4">Set a budget per category. The project budget is their sum.</p>
+        <p className="text-xs text-muted-foreground mb-4">Set the overall project budget. All spend is measured against this total.</p>
         {isNew && (
           <div className="mb-4">
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Project name</label>
@@ -239,27 +236,16 @@ function BudgetModal({ project, onClose, onSaved }) {
               className="w-full mt-1 bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
         )}
-        <div className="space-y-2.5">
-          {BUDGET_CATS.map(([key, label, Icon, tint]) => (
-            <div key={key} className="flex items-center gap-3">
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <Icon className="w-4 h-4 flex-none" style={{ color: tint }} />
-                <span className="text-sm truncate">{label}</span>
-              </div>
-              <div className="inline-flex items-center rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-primary/30 w-36 flex-none">
-                <span className="pl-2.5 text-muted-foreground text-sm">$</span>
-                <input type="number" step="any" value={b['budget_' + key]} placeholder="0"
-                  onChange={(e) => setB((s) => ({ ...s, ['budget_' + key]: e.target.value }))}
-                  className="w-full bg-transparent outline-none px-2 py-2 text-sm tabular-nums text-right" />
-              </div>
-            </div>
-          ))}
+        <div>
+          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Overall budget</label>
+          <div className="inline-flex items-center rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-primary/30 w-full mt-1">
+            <span className="pl-3 text-muted-foreground">$</span>
+            <input type="number" step="any" value={budget} placeholder="0" autoFocus={!isNew}
+              onChange={(e) => setBudget(e.target.value)}
+              className="w-full bg-transparent outline-none px-2 py-2 text-sm tabular-nums" />
+          </div>
         </div>
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-border">
-          <span className="text-sm text-muted-foreground">Total budget</span>
-          <span className="text-lg font-bold tabular-nums">{money(total)}</span>
-        </div>
-        <div className="flex justify-end gap-2 mt-4">
+        <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary">Cancel</button>
           <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold shadow-sm hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
             {saving && <Loader2 className="w-4 h-4 animate-spin" />} {isNew ? 'Create' : 'Save'}
@@ -365,20 +351,14 @@ function StatTile({ icon: Icon, label, value, sub, tint, value_tint }) {
 
 function CatBudget({ data, meta }) {
   const [, label, Icon, tint] = meta;
-  const pct = data.budget > 0 ? Math.min(100, data.pct) : 0;
   return (
     <div className="rounded-xl border border-border bg-background p-3">
       <div className="flex items-center gap-1.5 mb-1.5">
         <Icon className="w-3.5 h-3.5 flex-none" style={{ color: tint }} />
         <span className="text-xs font-medium text-muted-foreground truncate">{label}</span>
       </div>
-      <div className="text-base font-bold tabular-nums">{money(data.spend || 0)}</div>
-      <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-1.5">
-        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: data.budget > 0 ? budgetColor(data.pct) : 'hsl(var(--muted-foreground))' }} />
-      </div>
-      <div className="text-[11px] text-muted-foreground mt-1">
-        {data.budget > 0 ? <>of {money(data.budget)} · <span style={{ color: budgetColor(data.pct) }} className="font-semibold">{data.pct}%</span></> : 'No budget set'}
-      </div>
+      <div className="text-lg font-bold tabular-nums" style={{ color: tint }}>{money(data.spend || 0)}</div>
+      <div className="text-[11px] text-muted-foreground mt-0.5">spent</div>
     </div>
   );
 }
@@ -419,13 +399,15 @@ function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, 
       {/* Budget vs. actual — distinct lighter panel */}
       <div className="rounded-2xl border border-border bg-secondary/40 p-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold flex items-center gap-1.5"><Wallet className="w-4 h-4 text-muted-foreground" /> Budget vs. Actual</h3>
-          {editable && <button onClick={onEditBudget} className="text-xs text-primary hover:underline font-medium">Edit budgets</button>}
+          <h3 className="text-sm font-semibold flex items-center gap-1.5"><Wallet className="w-4 h-4 text-muted-foreground" /> Spend by Category</h3>
+          {editable && <button onClick={onEditBudget} className="text-xs text-primary hover:underline font-medium">Edit budget</button>}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {BUDGET_CATS.map((meta) => <CatBudget key={meta[0]} data={bud[meta[0]] || {}} meta={meta} />)}
         </div>
       </div>
+
+      <PurchaseOrders project={p} editable={editable} onAddPO={onAddPO} onSavePO={onSavePO} onDelPO={onDelPO} />
 
       {/* Weekly entry */}
       <div>
@@ -444,8 +426,6 @@ function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, 
       </div>
 
       <ChangeOrders project={p} editable={editable} onAddCO={onAddCO} onSaveCO={onSaveCO} onDelCO={onDelCO} />
-
-      <PurchaseOrders project={p} editable={editable} onAddPO={onAddPO} onSavePO={onSavePO} onDelPO={onDelPO} />
     </div>
   );
 }

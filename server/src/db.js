@@ -146,6 +146,7 @@ db.exec(`
     budget_materials_elec REAL NOT NULL DEFAULT 0,
     budget_materials_mech REAL NOT NULL DEFAULT 0,
     budget_rental REAL NOT NULL DEFAULT 0,
+    budget_total REAL NOT NULL DEFAULT 0,
     archived INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_by TEXT,
@@ -246,6 +247,7 @@ ensureColumn('expense_projects', 'budget_staff_mech', 'REAL NOT NULL DEFAULT 0')
 ensureColumn('expense_projects', 'budget_materials_elec', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('expense_projects', 'budget_materials_mech', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('expense_projects', 'budget_rental', 'REAL NOT NULL DEFAULT 0');
+ensureColumn('expense_projects', 'budget_total', 'REAL NOT NULL DEFAULT 0');
 // Staffing payroll on weeks
 ensureColumn('expense_weeks', 'staff_elec_pay', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('expense_weeks', 'staff_elec_hours', 'REAL NOT NULL DEFAULT 0');

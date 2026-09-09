@@ -84,16 +84,11 @@ function buildSummary(projectId) {
       materials_elec: categoryTotals['Materials – Electrical'] || 0,
       materials_mech: categoryTotals['Materials – Mechanical'] || 0,
       rental: categoryTotals['Equipment Rental'] || 0,
+      other: categoryTotals['Other'] || 0,
     };
-    const bud = {
-      elec: num(p.budget_elec), mech: num(p.budget_mech),
-      staff_elec: num(p.budget_staff_elec), staff_mech: num(p.budget_staff_mech),
-      materials_elec: num(p.budget_materials_elec), materials_mech: num(p.budget_materials_mech),
-      rental: num(p.budget_rental),
-    };
-    const budgetTotal = Object.values(bud).reduce((s, v) => s + v, 0);
-
-    const catLine = (label, sp, b) => ({ label, spend: sp, budget: b, remaining: b > 0 ? b - sp : 0, pct: b > 0 ? Math.round((sp / b) * 100) : 0 });
+    // Single overall project budget (set directly). Categories are display-only.
+    const budgetTotal = num(p.budget_total);
+    const catSpend = (label, sp) => ({ label, spend: sp });
 
     out.push({
       ...p,
@@ -132,13 +127,14 @@ function buildSummary(projectId) {
         budget_pct: budgetTotal > 0 ? Math.round((projTotal / budgetTotal) * 100) : 0,
       },
       budgets: {
-        elec: catLine('Electrical Payroll', spend.elec, bud.elec),
-        mech: catLine('Mechanical Payroll', spend.mech, bud.mech),
-        staff_elec: catLine('Staffing – Electrical', spend.staff_elec, bud.staff_elec),
-        staff_mech: catLine('Staffing – Mechanical', spend.staff_mech, bud.staff_mech),
-        materials_elec: catLine('Materials – Electrical', spend.materials_elec, bud.materials_elec),
-        materials_mech: catLine('Materials – Mechanical', spend.materials_mech, bud.materials_mech),
-        rental: catLine('Equipment Rental', spend.rental, bud.rental),
+        elec: catSpend('Electrical Payroll', spend.elec),
+        mech: catSpend('Mechanical Payroll', spend.mech),
+        staff_elec: catSpend('Staffing – Electrical', spend.staff_elec),
+        staff_mech: catSpend('Staffing – Mechanical', spend.staff_mech),
+        materials_elec: catSpend('Materials – Electrical', spend.materials_elec),
+        materials_mech: catSpend('Materials – Mechanical', spend.materials_mech),
+        rental: catSpend('Equipment Rental', spend.rental),
+        other: catSpend('Other', spend.other),
       },
       category_totals: categoryTotals,
       trend: weekOut.map((w) => ({ week_ending: w.week_ending, total: w.totals.total })),
@@ -166,7 +162,7 @@ router.post('/categories', appEditRequired('expenses'), (req, res) => {
 });
 
 // ===== Projects =====
-const PROJECT_BUDGET_COLS = ['budget_elec', 'budget_mech', 'budget_staff_elec', 'budget_staff_mech', 'budget_materials_elec', 'budget_materials_mech', 'budget_rental'];
+const PROJECT_BUDGET_COLS = ['budget_total'];
 
 router.get('/projects', (_req, res) => {
   res.json(db.prepare('SELECT * FROM expense_projects WHERE archived = 0 ORDER BY sort_order, name').all());
