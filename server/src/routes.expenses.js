@@ -87,23 +87,25 @@ function buildSummary(projectId) {
       other: categoryTotals['Other'] || 0,
     };
     // Single overall project budget (set directly). Categories are display-only.
-    const budgetTotal = num(p.budget_total);
     const catSpend = (label, sp) => ({ label, spend: sp });
+
+    // Change orders (computed up front so their $ can be folded into the budget).
+    const coRows = db.prepare('SELECT * FROM expense_change_orders WHERE project_id = ? ORDER BY sort_order, co_date').all(p.id);
+    const coTotals = {
+      count: coRows.length,
+      man_hours: coRows.reduce((s, c) => s + num(c.man_hours), 0),
+      equipment_total: coRows.reduce((s, c) => s + num(c.equipment_total), 0),
+      total: coRows.reduce((s, c) => s + num(c.total), 0),
+    };
+    // Effective budget = base budget + all change order totals.
+    const baseBudget = num(p.budget_total);
+    const budgetTotal = baseBudget + coTotals.total;
 
     out.push({
       ...p,
       weeks: weekOut,
       week_count: weekOut.length,
-      change_orders: (() => {
-        const cos = db.prepare('SELECT * FROM expense_change_orders WHERE project_id = ? ORDER BY sort_order, co_date').all(p.id);
-        const co_totals = {
-          count: cos.length,
-          man_hours: cos.reduce((s, c) => s + num(c.man_hours), 0),
-          equipment_total: cos.reduce((s, c) => s + num(c.equipment_total), 0),
-          total: cos.reduce((s, c) => s + num(c.total), 0),
-        };
-        return { list: cos, totals: co_totals };
-      })(),
+      change_orders: { list: coRows, totals: coTotals },
       purchase_orders: (() => {
         const pos = db.prepare('SELECT * FROM expense_purchase_orders WHERE project_id = ? ORDER BY sort_order, created_date').all(p.id);
         const received = pos.reduce((s, o) => s + num(o.amount), 0);
@@ -123,6 +125,7 @@ function buildSummary(projectId) {
         elec_pay: elecPay, mech_pay: mechPay, staff_elec_pay: staffElecPay, staff_mech_pay: staffMechPay,
         cost_per_hour: projHours > 0 ? projTotal / projHours : 0,
         budget: budgetTotal,
+        base_budget: baseBudget,
         budget_remaining: budgetTotal > 0 ? budgetTotal - projTotal : 0,
         budget_pct: budgetTotal > 0 ? Math.round((projTotal / budgetTotal) * 100) : 0,
       },
