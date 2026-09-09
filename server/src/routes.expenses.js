@@ -15,6 +15,22 @@ const id = () => crypto.randomBytes(12).toString('hex');
 const now = () => new Date().toISOString();
 const num = (v) => { const n = Number(v); return isNaN(n) ? 0 : n; };
 
+// Normalize a pasted date to YYYY-MM-DD so the HTML date input can render it.
+// Accepts YYYY-MM-DD, M/D/YYYY, M/D/YY, with stray whitespace / carriage returns.
+function normDate(v) {
+  if (v == null) return '';
+  let s = String(v).replace(/[\r\n]/g, '').trim();
+  if (!s) return '';
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return `${m[1]}-${String(+m[2]).padStart(2,'0')}-${String(+m[3]).padStart(2,'0')}`;
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (m) {
+    let [, mo, da, yr] = m; yr = +yr < 100 ? 2000 + +yr : +yr;
+    return `${yr}-${String(+mo).padStart(2,'0')}-${String(+da).padStart(2,'0')}`;
+  }
+  return s; // leave anything unrecognized untouched
+}
+
 router.use(authRequired);
 router.use(appReadRequired('expenses'));
 
@@ -92,6 +108,20 @@ function buildSummary(projectId) {
           total: cos.reduce((s, c) => s + num(c.total), 0),
         };
         return { list: cos, totals: co_totals };
+      })(),
+      purchase_orders: (() => {
+        const pos = db.prepare('SELECT * FROM expense_purchase_orders WHERE project_id = ? ORDER BY sort_order, created_date').all(p.id);
+        const received = pos.reduce((s, o) => s + num(o.amount), 0);
+        const paid = pos.filter((o) => o.paid).reduce((s, o) => s + num(o.amount), 0);
+        return {
+          list: pos.map((o) => ({ ...o, paid: !!o.paid })),
+          totals: {
+            count: pos.length,
+            received,                 // total PO $ awarded
+            paid,                     // PO $ marked paid
+            unpaid: received - paid,
+          },
+        };
       })(),
       totals: {
         total: projTotal, payroll: projPayroll, items_total: projItems, hours: projHours,
@@ -188,7 +218,7 @@ const WEEK_PAY_COLS = ['elec_pay', 'elec_hours', 'mech_pay', 'mech_hours', 'staf
 
 function insertWeek(project_id, body, user) {
   const row = {
-    id: id(), project_id, week_ending: String(body.week_ending).trim(),
+    id: id(), project_id, week_ending: normDate(body.week_ending),
     notes: (body.notes || '').trim() || null,
     created_by: user || null, updated_by: user || null, created_date: now(), updated_date: now(),
   };
@@ -210,7 +240,7 @@ router.put('/weeks/:id', appEditRequired('expenses'), (req, res) => {
   const w = db.prepare('SELECT * FROM expense_weeks WHERE id = ?').get(req.params.id);
   if (!w) return res.status(404).json({ error: 'Not found' });
   const b = req.body || {};
-  const week_ending = b.week_ending != null ? String(b.week_ending).trim() : w.week_ending;
+  const week_ending = b.week_ending != null ? normDate(b.week_ending) : w.week_ending;
   const notes = b.notes != null ? (String(b.notes).trim() || null) : w.notes;
   const vals = WEEK_PAY_COLS.map((c) => (b[c] != null ? num(b[c]) : w[c]));
   db.prepare(`UPDATE expense_weeks SET week_ending=?, ${WEEK_PAY_COLS.map((c) => c + '=?').join(', ')}, notes=?, updated_by=?, updated_date=? WHERE id=?`)
@@ -229,8 +259,8 @@ router.delete('/weeks/:id', appEditRequired('expenses'), (req, res) => {
 // ===== Bulk import: paste weekly totals -> create many weeks at once =====
 // Body: { project_id, rows: [{ week_ending, elec_pay, elec_hours, mech_pay,
 //   mech_hours, staff_elec_pay, staff_elec_hours, staff_mech_pay,
-//   staff_mech_hours, materials_elec, materials_mech, rental, notes }] }
-// materials_elec / materials_mech / rental become expense line items.
+//   staff_mech_hours, materials_elec, materials_mech, rental, other, notes }] }
+// materials_elec / materials_mech / rental / other become expense line items.
 router.post('/import', appEditRequired('expenses'), (req, res) => {
   const project_id = req.body?.project_id;
   const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
@@ -243,7 +273,7 @@ router.post('/import', appEditRequired('expenses'), (req, res) => {
   let created = 0;
   const tx = db.transaction(() => {
     for (const r of rows) {
-      const we = (r.week_ending || '').trim();
+      const we = normDate(r.week_ending);
       if (!we) continue;
       const week = insertWeek(project_id, r, req.user?.email);
       created++;
@@ -251,6 +281,7 @@ router.post('/import', appEditRequired('expenses'), (req, res) => {
         ['Materials – Electrical', r.materials_elec],
         ['Materials – Mechanical', r.materials_mech],
         ['Equipment Rental', r.rental],
+        ['Other', r.other],
       ];
       let so = 0;
       for (const [cat, amt] of lineDefs) {
@@ -345,6 +376,46 @@ router.delete('/change-orders/:id', appEditRequired('expenses'), (req, res) => {
   const co = db.prepare('SELECT * FROM expense_change_orders WHERE id = ?').get(req.params.id);
   if (!co) return res.status(404).json({ error: 'Not found' });
   db.prepare('DELETE FROM expense_change_orders WHERE id = ?').run(co.id);
+  res.json({ ok: true });
+});
+
+// ===== Purchase Orders (money awarded/received, per project) =====
+router.post('/purchase-orders', appEditRequired('expenses'), (req, res) => {
+  const project_id = req.body?.project_id;
+  if (!project_id) return res.status(400).json({ error: 'project_id required' });
+  if (!db.prepare('SELECT id FROM expense_projects WHERE id = ?').get(project_id)) return res.status(400).json({ error: 'Invalid project' });
+  const maxRow = db.prepare('SELECT MAX(sort_order) AS m FROM expense_purchase_orders WHERE project_id = ?').get(project_id);
+  const row = {
+    id: id(), project_id,
+    po_number: (req.body?.po_number || '').trim() || null,
+    amount: num(req.body?.amount),
+    paid: req.body?.paid ? 1 : 0,
+    sort_order: (maxRow && maxRow.m != null ? maxRow.m : -1) + 1,
+    created_by: req.user?.email || null, updated_by: req.user?.email || null,
+    created_date: now(), updated_date: now(),
+  };
+  db.prepare(`INSERT INTO expense_purchase_orders (id,project_id,po_number,amount,paid,sort_order,created_by,updated_by,created_date,updated_date)
+    VALUES (@id,@project_id,@po_number,@amount,@paid,@sort_order,@created_by,@updated_by,@created_date,@updated_date)`).run(row);
+  res.json({ ...row, paid: !!row.paid });
+});
+
+router.put('/purchase-orders/:id', appEditRequired('expenses'), (req, res) => {
+  const o = db.prepare('SELECT * FROM expense_purchase_orders WHERE id = ?').get(req.params.id);
+  if (!o) return res.status(404).json({ error: 'Not found' });
+  const b = req.body || {};
+  const po_number = b.po_number != null ? (String(b.po_number).trim() || null) : o.po_number;
+  const amount = b.amount != null ? num(b.amount) : o.amount;
+  const paid = b.paid != null ? (b.paid ? 1 : 0) : o.paid;
+  db.prepare('UPDATE expense_purchase_orders SET po_number=?, amount=?, paid=?, updated_by=?, updated_date=? WHERE id=?')
+    .run(po_number, amount, paid, req.user?.email || null, now(), o.id);
+  const u = db.prepare('SELECT * FROM expense_purchase_orders WHERE id = ?').get(o.id);
+  res.json({ ...u, paid: !!u.paid });
+});
+
+router.delete('/purchase-orders/:id', appEditRequired('expenses'), (req, res) => {
+  const o = db.prepare('SELECT * FROM expense_purchase_orders WHERE id = ?').get(req.params.id);
+  if (!o) return res.status(404).json({ error: 'Not found' });
+  db.prepare('DELETE FROM expense_purchase_orders WHERE id = ?').run(o.id);
   res.json({ ok: true });
 });
 

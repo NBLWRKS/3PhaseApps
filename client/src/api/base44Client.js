@@ -227,6 +227,9 @@ const expenses = {
   addChangeOrder: (data) => request('POST', '/expenses/change-orders', { body: data }),
   updateChangeOrder: (id, data) => request('PUT', `/expenses/change-orders/${id}`, { body: data }),
   deleteChangeOrder: (id) => request('DELETE', `/expenses/change-orders/${id}`),
+  addPO: (data) => request('POST', '/expenses/purchase-orders', { body: data }),
+  updatePO: (id, data) => request('PUT', `/expenses/purchase-orders/${id}`, { body: data }),
+  deletePO: (id) => request('DELETE', `/expenses/purchase-orders/${id}`),
 };
 
 export const base44 = {

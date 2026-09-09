@@ -205,6 +205,21 @@ db.exec(`
     created_date TEXT NOT NULL,
     updated_date TEXT NOT NULL
   );
+
+  -- Purchase Orders — money AWARDED/received per project (revenue side),
+  -- compared against spend. Not part of weekly spend.
+  CREATE TABLE IF NOT EXISTS expense_purchase_orders (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    po_number TEXT,
+    amount REAL NOT NULL DEFAULT 0,
+    paid INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT,
+    updated_by TEXT,
+    created_date TEXT NOT NULL,
+    updated_date TEXT NOT NULL
+  );
 `);
 
 // --- Lightweight migrations for databases created before these columns

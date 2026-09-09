@@ -113,6 +113,17 @@ export default function Expenses() {
     if (!confirm(`Delete change order ${co.co_number || ''}?`)) return;
     try { await base44.expenses.deleteChangeOrder(co.id); refresh(); } catch { toast.error('Failed to delete'); }
   };
+  const addPO = async (projectId) => {
+    try { await base44.expenses.addPO({ project_id: projectId, po_number: '', amount: 0, paid: false }); refresh(); }
+    catch { toast.error('Failed to add PO'); }
+  };
+  const savePO = async (po, patch) => {
+    try { await base44.expenses.updatePO(po.id, patch); refresh(); } catch { toast.error('Failed to save'); }
+  };
+  const delPO = async (po) => {
+    if (!confirm(`Delete PO ${po.po_number || ''}?`)) return;
+    try { await base44.expenses.deletePO(po.id); refresh(); } catch { toast.error('Failed to delete'); }
+  };
 
   const selected = summary.find((x) => x.id === selectedId) || summary[0] || null;
 
@@ -179,7 +190,8 @@ export default function Expenses() {
             onAddItem={addItem} onSaveItem={saveItem} onDelItem={delItem}
             onDelProject={delProject} onEditBudget={() => setBudgetModal(selected)}
             onImport={() => setImportFor(selected)} onAddCategory={addCategory}
-            onAddCO={addCO} onSaveCO={saveCO} onDelCO={delCO} />
+            onAddCO={addCO} onSaveCO={saveCO} onDelCO={delCO}
+            onAddPO={addPO} onSavePO={savePO} onDelPO={delPO} />
         ) : null}
       </main>
 
@@ -264,7 +276,7 @@ const IMPORT_COLS = [
   ['mech_pay', 'Mech pay'], ['mech_hours', 'Mech hrs'],
   ['staff_elec_pay', 'Staff elec pay'], ['staff_elec_hours', 'Staff elec hrs'],
   ['staff_mech_pay', 'Staff mech pay'], ['staff_mech_hours', 'Staff mech hrs'],
-  ['materials_elec', 'Materials elec'], ['materials_mech', 'Materials mech'], ['rental', 'Rental'],
+  ['materials_elec', 'Materials elec'], ['materials_mech', 'Materials mech'], ['rental', 'Rental'], ['other', 'Other'],
 ];
 
 function ImportModal({ project, onClose, onDone }) {
@@ -308,7 +320,7 @@ function ImportModal({ project, onClose, onDone }) {
           {IMPORT_COLS.map(([, label]) => label).join('  ·  ')}
         </div>
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={8} autoFocus
-          placeholder={`2026-04-10\t19592\t500\t14000\t420\t0\t0\t0\t0\t3500\t1500\t2000`}
+          placeholder={`2026-04-10\t19592\t500\t14000\t420\t0\t0\t0\t0\t3500\t1500\t2000\t850`}
           className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm font-mono outline-none focus:ring-2 focus:ring-primary/30 resize-y" />
         <div className="flex items-center justify-between mt-2">
           <span className="text-xs text-muted-foreground">{parsed.length} week{parsed.length === 1 ? '' : 's'} detected</span>
@@ -371,7 +383,7 @@ function CatBudget({ data, meta }) {
   );
 }
 
-function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onImport, onAddCategory, onAddCO, onSaveCO, onDelCO }) {
+function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onImport, onAddCategory, onAddCO, onSaveCO, onDelCO, onAddPO, onSavePO, onDelPO }) {
   const t = p.totals || {};
   const bud = p.budgets || {};
   return (
@@ -432,6 +444,8 @@ function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, 
       </div>
 
       <ChangeOrders project={p} editable={editable} onAddCO={onAddCO} onSaveCO={onSaveCO} onDelCO={onDelCO} />
+
+      <PurchaseOrders project={p} editable={editable} onAddPO={onAddPO} onSavePO={onSavePO} onDelPO={onDelPO} />
     </div>
   );
 }
@@ -492,6 +506,90 @@ function ChangeOrders({ project: p, editable, onAddCO, onSaveCO, onDelCO }) {
                     {editable ? <NumInput value={c.total} prefix="$" onCommit={(v) => onSaveCO(c, { total: v })} /> : <span className="tabular-nums font-medium">{money(c.total)}</span>}
                   </td>
                   {editable && <td className="pr-2 text-right"><button onClick={() => onDelCO(c)} className="text-muted-foreground hover:text-destructive transition"><Trash2 className="w-3.5 h-3.5" /></button></td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PurchaseOrders({ project: p, editable, onAddPO, onSavePO, onDelPO }) {
+  const po = p.purchase_orders || { list: [], totals: {} };
+  const t = po.totals || {};
+  const spent = p.totals?.total || 0;
+  const received = t.received || 0;
+  const net = received - spent; // positive = received more than spent
+  const pctSpentOfPO = received > 0 ? Math.round((spent / received) * 100) : 0;
+  return (
+    <div className="rounded-2xl border border-border bg-secondary/40 p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h3 className="text-sm font-semibold flex items-center gap-1.5"><FileText className="w-4 h-4 text-muted-foreground" /> Purchase Orders (received) vs. Spend</h3>
+        {editable && <button onClick={() => onAddPO(p.id)} className="text-xs text-primary hover:underline font-medium flex items-center gap-0.5"><Plus className="w-3 h-3" /> Add PO</button>}
+      </div>
+
+      {/* Comparison tiles */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+        <div className="rounded-xl border border-border bg-card p-3">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">PO Received</div>
+          <div className="text-xl font-bold tabular-nums mt-0.5" style={{ color: 'hsl(160 84% 42%)' }}>{money(received)}</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">{money(t.paid)} paid · {money(t.unpaid)} unpaid</div>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-3">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Spent</div>
+          <div className="text-xl font-bold tabular-nums mt-0.5">{money(spent)}</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">payroll + expenses</div>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-3">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Net (Received − Spent)</div>
+          <div className="text-xl font-bold tabular-nums mt-0.5" style={{ color: net >= 0 ? 'hsl(160 84% 42%)' : 'hsl(0 72% 55%)' }}>{money(net)}</div>
+          <div className="text-[11px] text-muted-foreground mt-0.5">{net >= 0 ? 'received exceeds spend' : 'spend exceeds received'}</div>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-3">
+          <div className="text-xs text-muted-foreground uppercase tracking-wide">Spent vs. PO</div>
+          <div className="text-xl font-bold tabular-nums mt-0.5" style={{ color: pctSpentOfPO >= 100 ? 'hsl(0 72% 55%)' : 'hsl(208 75% 55%)' }}>{received > 0 ? `${pctSpentOfPO}%` : '—'}</div>
+          <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-1.5">
+            <div className="h-full rounded-full" style={{ width: `${Math.min(100, pctSpentOfPO)}%`, backgroundColor: pctSpentOfPO >= 100 ? 'hsl(0 72% 55%)' : 'hsl(208 75% 55%)' }} />
+          </div>
+        </div>
+      </div>
+
+      {/* PO list */}
+      {po.list.length === 0 ? (
+        <div className="text-xs text-muted-foreground px-1">No POs.{editable && <button onClick={() => onAddPO(p.id)} className="ml-1 text-primary hover:underline">Add one</button>}</div>
+      ) : (
+        <div className="rounded-lg border border-border overflow-hidden bg-card">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted-foreground border-b border-border bg-secondary/30">
+                <th className="text-left font-medium px-3 py-1.5 w-48">PO #</th>
+                <th className="text-left font-medium px-2 py-1.5 w-36">Amount</th>
+                <th className="text-left font-medium px-2 py-1.5 w-28">Paid?</th>
+                {editable && <th className="w-9"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {po.list.map((o, i) => (
+                <tr key={o.id} className={`${i % 2 ? 'bg-secondary/20' : ''}`}>
+                  <td className="px-3 py-1.5">
+                    {editable ? <input defaultValue={o.po_number || ''} placeholder="PO #"
+                      onBlur={(e) => (e.target.value || '') !== (o.po_number || '') && onSavePO(o, { po_number: e.target.value })}
+                      className="w-full bg-background border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-primary/30" /> : <span className="font-medium">{o.po_number || '—'}</span>}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    {editable ? <NumInput value={o.amount} prefix="$" onCommit={(v) => onSavePO(o, { amount: v })} /> : <span className="tabular-nums font-medium">{money(o.amount)}</span>}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    {editable ? (
+                      <button onClick={() => onSavePO(o, { paid: !o.paid })}
+                        className={`text-xs px-2.5 py-1 rounded-full font-medium ${o.paid ? 'bg-green-500/15 text-green-500' : 'bg-muted text-muted-foreground'}`}>
+                        {o.paid ? 'Paid' : 'Unpaid'}
+                      </button>
+                    ) : <span className={o.paid ? 'text-green-500' : 'text-muted-foreground'}>{o.paid ? 'Paid' : 'Unpaid'}</span>}
+                  </td>
+                  {editable && <td className="pr-2 text-right"><button onClick={() => onDelPO(o)} className="text-muted-foreground hover:text-destructive transition"><Trash2 className="w-3.5 h-3.5" /></button></td>}
                 </tr>
               ))}
             </tbody>
