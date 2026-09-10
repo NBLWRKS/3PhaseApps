@@ -230,6 +230,11 @@ const expenses = {
   addPO: (data) => request('POST', '/expenses/purchase-orders', { body: data }),
   updatePO: (id, data) => request('PUT', `/expenses/purchase-orders/${id}`, { body: data }),
   deletePO: (id) => request('DELETE', `/expenses/purchase-orders/${id}`),
+  listRentalTypes: () => request('GET', '/expenses/rental-types'),
+  addRentalType: (name) => request('POST', '/expenses/rental-types', { body: { name } }),
+  addRental: (data) => request('POST', '/expenses/rentals', { body: data }),
+  updateRental: (id, data) => request('PUT', `/expenses/rentals/${id}`, { body: data }),
+  deleteRental: (id) => request('DELETE', `/expenses/rentals/${id}`),
 };
 
 export const base44 = {

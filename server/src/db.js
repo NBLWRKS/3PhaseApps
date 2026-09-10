@@ -221,6 +221,31 @@ db.exec(`
     created_date TEXT NOT NULL,
     updated_date TEXT NOT NULL
   );
+
+  -- Equipment rentals log, per project. Cost counts toward Equipment Rental spend.
+  CREATE TABLE IF NOT EXISTS expense_rentals (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    equipment_type TEXT,
+    serial_number TEXT,
+    trade TEXT,                          -- 'Mechanical' | 'Electrical'
+    date_delivered TEXT,
+    date_returned TEXT,                  -- blank = still out
+    cost REAL NOT NULL DEFAULT 0,
+    notes TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT,
+    updated_by TEXT,
+    created_date TEXT NOT NULL,
+    updated_date TEXT NOT NULL
+  );
+
+  -- Custom equipment types the user adds (base types built into the UI).
+  CREATE TABLE IF NOT EXISTS expense_rental_types (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    created_date TEXT NOT NULL
+  );
 `);
 
 // --- Lightweight migrations for databases created before these columns

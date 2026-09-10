@@ -86,6 +86,18 @@ function buildSummary(projectId) {
       rental: categoryTotals['Equipment Rental'] || 0,
       other: categoryTotals['Other'] || 0,
     };
+    // Equipment rentals (computed up front so cost folds into spend + total).
+    const rentalRows = db.prepare('SELECT * FROM expense_rentals WHERE project_id = ? ORDER BY sort_order, date_delivered').all(p.id);
+    const rentalCost = rentalRows.reduce((s, x) => s + num(x.cost), 0);
+    const rentalTotals = {
+      count: rentalRows.length,
+      out: rentalRows.filter((x) => !x.date_returned).length,
+      cost: rentalCost,
+    };
+    // Rental costs count toward Equipment Rental spend and the project total.
+    projTotal += rentalCost;
+    spend.rental += rentalCost;
+
     // Single overall project budget (set directly). Categories are display-only.
     const catSpend = (label, sp) => ({ label, spend: sp });
 
@@ -106,6 +118,7 @@ function buildSummary(projectId) {
       weeks: weekOut,
       week_count: weekOut.length,
       change_orders: { list: coRows, totals: coTotals },
+      rentals: { list: rentalRows, totals: rentalTotals },
       purchase_orders: (() => {
         const pos = db.prepare('SELECT * FROM expense_purchase_orders WHERE project_id = ? ORDER BY sort_order, created_date').all(p.id);
         const received = pos.reduce((s, o) => s + num(o.amount), 0);
@@ -415,6 +428,72 @@ router.delete('/purchase-orders/:id', appEditRequired('expenses'), (req, res) =>
   const o = db.prepare('SELECT * FROM expense_purchase_orders WHERE id = ?').get(req.params.id);
   if (!o) return res.status(404).json({ error: 'Not found' });
   db.prepare('DELETE FROM expense_purchase_orders WHERE id = ?').run(o.id);
+  res.json({ ok: true });
+});
+
+// ===== Equipment Rentals (per project) =====
+const BASE_RENTAL_TYPES = ['Scissor Lift', 'Gas Monitor', 'Fork Lift', 'Donkey'];
+const RENTAL_COLS = ['equipment_type', 'serial_number', 'trade', 'date_delivered', 'date_returned', 'cost', 'notes'];
+
+router.get('/rental-types', (_req, res) => {
+  const custom = db.prepare('SELECT name FROM expense_rental_types ORDER BY name').all().map((r) => r.name);
+  res.json([...BASE_RENTAL_TYPES, ...custom.filter((c) => !BASE_RENTAL_TYPES.includes(c))]);
+});
+router.post('/rental-types', appEditRequired('expenses'), (req, res) => {
+  const name = (req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Name required' });
+  if (!BASE_RENTAL_TYPES.includes(name) && !db.prepare('SELECT id FROM expense_rental_types WHERE name = ?').get(name)) {
+    db.prepare('INSERT INTO expense_rental_types (id, name, created_date) VALUES (?,?,?)').run(id(), name, now());
+  }
+  res.json({ ok: true, name });
+});
+
+router.post('/rentals', appEditRequired('expenses'), (req, res) => {
+  const project_id = req.body?.project_id;
+  if (!project_id) return res.status(400).json({ error: 'project_id required' });
+  if (!db.prepare('SELECT id FROM expense_projects WHERE id = ?').get(project_id)) return res.status(400).json({ error: 'Invalid project' });
+  const maxRow = db.prepare('SELECT MAX(sort_order) AS m FROM expense_rentals WHERE project_id = ?').get(project_id);
+  const b = req.body || {};
+  const row = {
+    id: id(), project_id,
+    equipment_type: (b.equipment_type || '').trim() || null,
+    serial_number: (b.serial_number || '').trim() || null,
+    trade: (b.trade || '').trim() || null,
+    date_delivered: normDate(b.date_delivered) || null,
+    date_returned: normDate(b.date_returned) || null,
+    cost: num(b.cost),
+    notes: (b.notes || '').trim() || null,
+    sort_order: (maxRow && maxRow.m != null ? maxRow.m : -1) + 1,
+    created_by: req.user?.email || null, updated_by: req.user?.email || null,
+    created_date: now(), updated_date: now(),
+  };
+  const cols = ['id', 'project_id', ...RENTAL_COLS, 'sort_order', 'created_by', 'updated_by', 'created_date', 'updated_date'];
+  db.prepare(`INSERT INTO expense_rentals (${cols.join(',')}) VALUES (${cols.map((c) => '@' + c).join(',')})`).run(row);
+  res.json(row);
+});
+
+router.put('/rentals/:id', appEditRequired('expenses'), (req, res) => {
+  const r0 = db.prepare('SELECT * FROM expense_rentals WHERE id = ?').get(req.params.id);
+  if (!r0) return res.status(404).json({ error: 'Not found' });
+  const b = req.body || {};
+  const v = {
+    equipment_type: b.equipment_type != null ? (String(b.equipment_type).trim() || null) : r0.equipment_type,
+    serial_number: b.serial_number != null ? (String(b.serial_number).trim() || null) : r0.serial_number,
+    trade: b.trade != null ? (String(b.trade).trim() || null) : r0.trade,
+    date_delivered: b.date_delivered !== undefined ? (normDate(b.date_delivered) || null) : r0.date_delivered,
+    date_returned: b.date_returned !== undefined ? (normDate(b.date_returned) || null) : r0.date_returned,
+    cost: b.cost != null ? num(b.cost) : r0.cost,
+    notes: b.notes != null ? (String(b.notes).trim() || null) : r0.notes,
+  };
+  db.prepare(`UPDATE expense_rentals SET equipment_type=?, serial_number=?, trade=?, date_delivered=?, date_returned=?, cost=?, notes=?, updated_by=?, updated_date=? WHERE id=?`)
+    .run(v.equipment_type, v.serial_number, v.trade, v.date_delivered, v.date_returned, v.cost, v.notes, req.user?.email || null, now(), r0.id);
+  res.json(db.prepare('SELECT * FROM expense_rentals WHERE id = ?').get(r0.id));
+});
+
+router.delete('/rentals/:id', appEditRequired('expenses'), (req, res) => {
+  const r0 = db.prepare('SELECT * FROM expense_rentals WHERE id = ?').get(req.params.id);
+  if (!r0) return res.status(404).json({ error: 'Not found' });
+  db.prepare('DELETE FROM expense_rentals WHERE id = ?').run(r0.id);
   res.json({ ok: true });
 });
 

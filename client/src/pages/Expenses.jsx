@@ -44,17 +44,20 @@ export default function Expenses() {
   const [selectedId, setSelectedId] = useState(null);
   const [budgetModal, setBudgetModal] = useState(null);
   const [importFor, setImportFor] = useState(null);
+  const [rentalTypes, setRentalTypes] = useState(['Scissor Lift', 'Gas Monitor', 'Fork Lift', 'Donkey']);
+  const [rentalModalFor, setRentalModalFor] = useState(null);
 
   const editable = canEdit(user, 'expenses');
 
   const load = useCallback((opts = {}) => {
     const { silent = false } = opts;
     if (!silent) setLoadingData(true);
-    Promise.all([base44.expenses.summary(), base44.expenses.listCategories()])
-      .then(([data, cats]) => {
+    Promise.all([base44.expenses.summary(), base44.expenses.listCategories(), base44.expenses.listRentalTypes()])
+      .then(([data, cats, rtypes]) => {
         const list = Array.isArray(data) ? data : [];
         setSummary(list);
         if (Array.isArray(cats) && cats.length) setCategories(cats);
+        if (Array.isArray(rtypes) && rtypes.length) setRentalTypes(rtypes);
         setSelectedId((cur) => (cur && list.some((p) => p.id === cur)) ? cur : (list[0]?.id || null));
       })
       .catch(() => { if (!silent) toast.error('Failed to load expenses'); })
@@ -125,6 +128,17 @@ export default function Expenses() {
     if (!confirm(`Delete PO ${po.po_number || ''}?`)) return;
     try { await base44.expenses.deletePO(po.id); refresh(); } catch { toast.error('Failed to delete'); }
   };
+  const saveRental = async (r, patch) => {
+    try { await base44.expenses.updateRental(r.id, patch); refresh(); } catch { toast.error('Failed to save'); }
+  };
+  const delRental = async (r) => {
+    if (!confirm('Delete this rental?')) return;
+    try { await base44.expenses.deleteRental(r.id); refresh(); } catch { toast.error('Failed to delete'); }
+  };
+  const addRentalType = async (name) => {
+    try { const r = await base44.expenses.addRentalType(name); if (r?.name) setRentalTypes((t) => [...new Set([...t, r.name])]); return r?.name; }
+    catch { toast.error('Failed to add type'); }
+  };
 
   const selected = summary.find((x) => x.id === selectedId) || summary[0] || null;
 
@@ -192,7 +206,8 @@ export default function Expenses() {
             onDelProject={delProject} onEditBudget={() => setBudgetModal(selected)}
             onImport={() => setImportFor(selected)} onAddCategory={addCategory}
             onAddCO={addCO} onSaveCO={saveCO} onDelCO={delCO}
-            onAddPO={addPO} onSavePO={savePO} onDelPO={delPO} />
+            onAddPO={addPO} onSavePO={savePO} onDelPO={delPO}
+            onAddRental={() => setRentalModalFor(selected)} onSaveRental={saveRental} onDelRental={delRental} />
         ) : null}
       </main>
 
@@ -202,6 +217,10 @@ export default function Expenses() {
       )}
       {importFor && (
         <ImportModal project={importFor} onClose={() => setImportFor(null)} onDone={() => { setImportFor(null); load(); }} />
+      )}
+      {rentalModalFor && (
+        <RentalModal project={rentalModalFor} rentalTypes={rentalTypes} onAddType={addRentalType}
+          onClose={() => setRentalModalFor(null)} onSaved={() => { setRentalModalFor(null); refresh(); }} />
       )}
     </div>
   );
@@ -363,7 +382,7 @@ function CatBudget({ data, meta }) {
   );
 }
 
-function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onImport, onAddCategory, onAddCO, onSaveCO, onDelCO, onAddPO, onSavePO, onDelPO }) {
+function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onImport, onAddCategory, onAddCO, onSaveCO, onDelCO, onAddPO, onSavePO, onDelPO, onAddRental, onSaveRental, onDelRental }) {
   const t = p.totals || {};
   const bud = p.budgets || {};
   return (
@@ -408,6 +427,8 @@ function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, 
       </div>
 
       <PurchaseOrders project={p} editable={editable} onAddPO={onAddPO} onSavePO={onSavePO} onDelPO={onDelPO} />
+
+      <Rentals project={p} editable={editable} onAddRental={onAddRental} onSaveRental={onSaveRental} onDelRental={onDelRental} />
 
       {/* Weekly entry */}
       <div>
@@ -492,6 +513,128 @@ function ChangeOrders({ project: p, editable, onAddCO, onSaveCO, onDelCO }) {
           </table>
         </div>
       )}
+    </div>
+  );
+}
+
+function Rentals({ project: p, editable, onAddRental, onSaveRental, onDelRental }) {
+  const rr = p.rentals || { list: [], totals: {} };
+  const t = rr.totals || {};
+  return (
+    <div className="rounded-2xl border border-border bg-secondary/40 p-4 shadow-sm">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h3 className="text-sm font-semibold flex items-center gap-1.5"><Truck className="w-4 h-4 text-muted-foreground" /> Equipment Rentals</h3>
+        <div className="flex items-center gap-4 text-xs">
+          <span className="text-muted-foreground">{t.count || 0} total · <span className="font-semibold text-foreground">{t.out || 0} still out</span></span>
+          <span className="text-muted-foreground">Cost <span className="font-semibold text-foreground tabular-nums">{money(t.cost)}</span></span>
+          {editable && <button onClick={() => onAddRental(p.id)} className="text-primary hover:underline font-medium flex items-center gap-0.5"><Plus className="w-3 h-3" /> Add Rental</button>}
+        </div>
+      </div>
+      {rr.list.length === 0 ? (
+        <div className="text-xs text-muted-foreground px-1">No rentals logged.{editable && <button onClick={() => onAddRental(p.id)} className="ml-1 text-primary hover:underline">Add one</button>}</div>
+      ) : (
+        <div className="rounded-lg border border-border overflow-x-auto bg-card">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted-foreground border-b border-border bg-secondary/30">
+                <th className="text-left font-medium px-3 py-1.5">Equipment</th>
+                <th className="text-left font-medium px-2 py-1.5">Serial #</th>
+                <th className="text-left font-medium px-2 py-1.5">Trade</th>
+                <th className="text-left font-medium px-2 py-1.5">Delivered</th>
+                <th className="text-left font-medium px-2 py-1.5">Returned</th>
+                <th className="text-left font-medium px-2 py-1.5">Cost</th>
+                {editable && <th className="w-9"></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {rr.list.map((r, i) => (
+                <tr key={r.id} className={`${i % 2 ? 'bg-secondary/20' : ''}`}>
+                  <td className="px-3 py-1.5 font-medium">{r.equipment_type || '—'}</td>
+                  <td className="px-2 py-1.5 text-muted-foreground">{r.serial_number || '—'}</td>
+                  <td className="px-2 py-1.5">{r.trade || '—'}</td>
+                  <td className="px-2 py-1.5 tabular-nums">{r.date_delivered || '—'}</td>
+                  <td className="px-2 py-1.5">
+                    {r.date_returned
+                      ? <span className="tabular-nums">{r.date_returned}</span>
+                      : <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-500 font-medium">Still out</span>}
+                    {editable && !r.date_returned && (
+                      <input type="date" title="Mark returned"
+                        onChange={(e) => e.target.value && onSaveRental(r, { date_returned: e.target.value })}
+                        className="ml-2 bg-background border border-border rounded px-1 py-0.5 text-xs outline-none focus:ring-2 focus:ring-primary/30" />
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 tabular-nums">{money(r.cost)}</td>
+                  {editable && <td className="pr-2 text-right"><button onClick={() => onDelRental(r)} className="text-muted-foreground hover:text-destructive transition"><Trash2 className="w-3.5 h-3.5" /></button></td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RentalModal({ project, rentalTypes, onAddType, onClose, onSaved }) {
+  const [f, setF] = useState({ equipment_type: rentalTypes[0] || '', serial_number: '', trade: 'Mechanical', date_delivered: '', date_returned: '', cost: '' });
+  const [types, setTypes] = useState(rentalTypes);
+  const [saving, setSaving] = useState(false);
+
+  const addType = async () => {
+    const name = prompt('New equipment type:');
+    if (!name || !name.trim()) return;
+    const added = await onAddType(name.trim());
+    if (added) { setTypes((t) => [...new Set([...t, added])]); setF((s) => ({ ...s, equipment_type: added })); }
+  };
+  const save = async () => {
+    setSaving(true);
+    try {
+      await base44.expenses.addRental({ project_id: project.id, ...f, cost: num(f.cost) });
+      onSaved();
+    } catch { toast.error('Failed to save rental'); setSaving(false); }
+  };
+
+  const field = (label, node) => (
+    <div><label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{label}</label><div className="mt-1">{node}</div></div>
+  );
+  const inputCls = "w-full bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-card border border-border shadow-xl p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-bold mb-1 flex items-center gap-2"><Truck className="w-5 h-5" /> Add Rental — {project.name}</h2>
+        <p className="text-xs text-muted-foreground mb-4">Cost counts toward Equipment Rental spend.</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {field('Equipment', (
+            <div className="flex gap-2">
+              <select value={f.equipment_type} onChange={(e) => setF((s) => ({ ...s, equipment_type: e.target.value }))} className={inputCls}>
+                {[...new Set([f.equipment_type, ...types].filter(Boolean))].map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+              <button onClick={addType} title="Add type" className="px-2.5 rounded-lg border border-border text-muted-foreground hover:text-primary hover:bg-secondary"><Plus className="w-4 h-4" /></button>
+            </div>
+          ))}
+          {field('Mechanical / Electrical', (
+            <select value={f.trade} onChange={(e) => setF((s) => ({ ...s, trade: e.target.value }))} className={inputCls}>
+              <option>Mechanical</option><option>Electrical</option>
+            </select>
+          ))}
+          {field('Serial number', <input value={f.serial_number} onChange={(e) => setF((s) => ({ ...s, serial_number: e.target.value }))} className={inputCls} />)}
+          {field('Cost', (
+            <div className="inline-flex items-center rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-primary/30 w-full">
+              <span className="pl-3 text-muted-foreground">$</span>
+              <input type="number" step="any" value={f.cost} placeholder="0" onChange={(e) => setF((s) => ({ ...s, cost: e.target.value }))} className="w-full bg-transparent outline-none px-2 py-2 text-sm tabular-nums" />
+            </div>
+          ))}
+          {field('Date delivered', <input type="date" value={f.date_delivered} onChange={(e) => setF((s) => ({ ...s, date_delivered: e.target.value }))} className={inputCls} />)}
+          {field('Date returned (optional)', <input type="date" value={f.date_returned} onChange={(e) => setF((s) => ({ ...s, date_returned: e.target.value }))} className={inputCls} />)}
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary">Cancel</button>
+          <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold shadow-sm hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />} Add Rental
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
