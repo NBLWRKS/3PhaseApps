@@ -24,6 +24,7 @@ import Expenses from '@/pages/Expenses';
 import Dashboard from '@/pages/Dashboard';
 import ReportEditor from '@/pages/ReportEditor';
 import ReportView from '@/pages/ReportView';
+import ApplyPacket from '@/pages/ApplyPacket';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -44,7 +45,7 @@ const AuthenticatedApp = () => {
       // register, splash, etc.) render normally and handle their own gating,
       // which avoids a redirect loop when a stored token has expired.
       const path = window.location.pathname;
-      const publicPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/', '/admin'];
+      const publicPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/', '/admin', '/apply'];
       // The public credential card (/SafetyCredentials/:slug) is viewable
       // without login — the QR on the ID cards points here.
       const isPublicCard = path.toLowerCase().startsWith('/safetycredentials');
@@ -71,6 +72,7 @@ const AuthenticatedApp = () => {
       <Route path="/safety/:slug" element={<SafetyEmployee />} />
       <Route path="/tracking" element={<Tracking />} />
       <Route path="/expenses" element={<Expenses />} />
+      <Route path="/apply" element={<ApplyPacket />} />
       {/* Capitalized URL form from the spec, e.g. /SafetyCredentials/DayanaAballay/ */}
       <Route path="/SafetyCredentials" element={<Navigate to="/safety" replace />} />
       <Route path="/SafetyCredentials/:slug" element={<SafetyCard />} />
