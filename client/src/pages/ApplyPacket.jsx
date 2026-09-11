@@ -1,16 +1,16 @@
 import React, { useState } from 'react';
-import { PACKET, HR_EMAIL } from '@/lib/applicationPacket';
+import { PACKET } from '@/lib/applicationPacket';
 import { buildFilledPdfs, fieldId } from '@/lib/fillPacket';
-import { CheckCircle2, Circle, ChevronLeft, ChevronRight, Loader2, Download, Mail, FileText } from 'lucide-react';
+import { CheckCircle2, Circle, ChevronLeft, ChevronRight, Loader2, Download, FileText } from 'lucide-react';
 import logo from '@/assets/logo.jpg';
 
 const T = {
   en: {
     welcome: 'Employment Application', pick: 'Choose your language', start: 'Start',
     step: 'Step', of: 'of', next: 'Next', back: 'Back', review: 'Review & Submit',
-    finish: 'Finish & Send to HR', downloading: 'Preparing your documents…',
+    finish: 'Finish & Submit', downloading: 'Submitting your documents…',
     optional: 'This form is optional — you can skip it.', skip: 'Skip this form',
-    reviewTitle: 'Review your packet', reviewNote: 'When you tap Finish, your completed PDFs will download to this device and your email app will open, addressed to HR. Attach the downloaded files and send.',
+    reviewTitle: 'Review your packet', reviewNote: 'When you tap Finish, your completed packet is submitted securely to 3 Phase Conveyor. A copy also downloads to this device for your records.',
     done: 'Your documents are ready', doneNote: 'The completed PDFs have downloaded to this device. Your email app should have opened, addressed to HR — attach the downloaded files and press send. If it did not open, use the button below.',
     openEmail: 'Open email to HR', redownload: 'Download PDFs again',
     lang: 'English',
@@ -18,7 +18,7 @@ const T = {
   es: {
     welcome: 'Solicitud de Empleo', pick: 'Elija su idioma', start: 'Comenzar',
     step: 'Paso', of: 'de', next: 'Siguiente', back: 'Atrás', review: 'Revisar y Enviar',
-    finish: 'Finalizar y Enviar a RR. HH.', downloading: 'Preparando sus documentos…',
+    finish: 'Finalizar y Enviar', downloading: 'Enviando sus documentos…',
     optional: 'Este formulario es opcional — puede omitirlo.', skip: 'Omitir este formulario',
     reviewTitle: 'Revise su paquete', reviewNote: 'Al tocar Finalizar, sus PDF completados se descargarán en este dispositivo y se abrirá su correo, dirigido a RR. HH. Adjunte los archivos descargados y envíe.',
     done: 'Sus documentos están listos', doneNote: 'Los PDF completados se han descargado en este dispositivo. Su aplicación de correo debería haberse abierto, dirigida a RR. HH. — adjunte los archivos descargados y presione enviar. Si no se abrió, use el botón de abajo.',
@@ -35,6 +35,7 @@ export default function ApplyPacket() {
   const [answers, setAnswers] = useState({});     // { formKey: { fieldId: value } }
   const [busy, setBusy] = useState(false);
   const [filled, setFilled] = useState(null);     // array of {name, blob}
+  const [submitOk, setSubmitOk] = useState(false);
 
   const t = lang ? T[lang] : T.en;
   const forms = PACKET;
@@ -73,12 +74,19 @@ export default function ApplyPacket() {
       <Shell>
         <div className="text-center">
           <CheckCircle2 className="w-14 h-14 text-green-600 mx-auto mb-3" />
-          <h1 className="text-2xl font-bold text-navy mb-2">{t.done}</h1>
-          <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">{t.doneNote}</p>
+          <h1 className="text-2xl font-bold text-navy mb-2">
+            {submitOk ? (lang === 'es' ? 'Solicitud enviada' : 'Application submitted') : (lang === 'es' ? 'Descargue y envíe' : 'Please download & send')}
+          </h1>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
+            {submitOk
+              ? (lang === 'es'
+                  ? 'Su paquete completo fue enviado de forma segura a 3 Phase Conveyor. También se descargó una copia a este dispositivo para sus registros.'
+                  : 'Your completed packet was securely submitted to 3 Phase Conveyor. A copy was also downloaded to this device for your records.')
+              : (lang === 'es'
+                  ? 'No pudimos enviar su paquete automáticamente. Sus PDF se descargaron a este dispositivo — entréguelos a Recursos Humanos.'
+                  : "We couldn't submit your packet automatically. Your PDFs downloaded to this device — please hand them to HR.")}
+          </p>
           <div className="flex flex-col gap-2 max-w-xs mx-auto">
-            <button onClick={openMail} className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-navy text-white font-semibold">
-              <Mail className="w-4 h-4" /> {t.openEmail}
-            </button>
             <button onClick={() => downloadAll(filled)} className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-border text-sm">
               <Download className="w-4 h-4" /> {t.redownload}
             </button>
@@ -116,7 +124,7 @@ export default function ApplyPacket() {
           </button>
           <button onClick={finish} disabled={busy}
             className="flex items-center gap-2 px-5 py-3 rounded-xl bg-green-600 text-white font-semibold disabled:opacity-60">
-            {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> {t.downloading}</> : <><Mail className="w-4 h-4" /> {t.finish}</>}
+            {busy ? <><Loader2 className="w-4 h-4 animate-spin" /> {t.downloading}</> : <><CheckCircle2 className="w-4 h-4" /> {t.finish}</>}
           </button>
         </div>
       </Shell>
@@ -164,8 +172,20 @@ export default function ApplyPacket() {
     try {
       const pdfs = await buildFilledPdfs(answers, lang);
       setFilled(pdfs);
+      // Upload the completed packet to the server (saved for HR to access).
+      const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+      const fd = new FormData();
+      fd.append('applicant', guessApplicantName(answers));
+      fd.append('lang', lang);
+      pdfs.forEach(({ name, blob }) => fd.append('files', blob, name));
+      let uploaded = false;
+      try {
+        const res = await fetch(`${API_BASE}/applications/submit`, { method: 'POST', body: fd });
+        uploaded = res.ok;
+      } catch { uploaded = false; }
+      setSubmitOk(uploaded);
+      // Always also offer the applicant a local copy as a courtesy/backup.
       downloadAll(pdfs);
-      openMail();
       setStepIdx(N + 1);
     } catch (e) {
       alert('Something went wrong preparing your documents. Please try again.');
@@ -174,14 +194,28 @@ export default function ApplyPacket() {
       setBusy(false);
     }
   }
+}
 
-  function openMail() {
-    const subject = encodeURIComponent('New Hire Application Packet');
-    const body = encodeURIComponent(
-      `Hello,\n\nMy completed new-hire application packet is attached.\n\nPlease attach the ${forms.length} PDF files that just downloaded to your device before sending.\n\nThank you.`
-    );
-    window.location.href = `mailto:${HR_EMAIL}?subject=${subject}&body=${body}`;
+// Best-effort applicant name from the job-application answers (server also
+// defaults if this comes back empty).
+function guessApplicantName(answers) {
+  const flat = {};
+  for (const form of Object.values(answers || {})) {
+    for (const [k, v] of Object.entries(form || {})) {
+      if (typeof v === 'string' && v.trim()) flat[k.toLowerCase()] = v.trim();
+    }
   }
+  const find = (...keys) => {
+    for (const want of keys) {
+      const hit = Object.keys(flat).find((k) => k.includes(want));
+      if (hit) return flat[hit];
+    }
+    return '';
+  };
+  const full = find('full name', 'fullname', 'name of applicant', 'applicant name');
+  if (full) return full;
+  const combined = [find('first'), find('last')].filter(Boolean).join(' ').trim();
+  return combined || 'Unnamed applicant';
 }
 
 function downloadAll(pdfs) {
