@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import logo from '@/assets/logo.jpg';
-import { FileText, ArrowRight, Zap, Wrench, Clock, LogOut, Shield, Loader2, Highlighter, ShieldCheck, BarChart3, DollarSign } from 'lucide-react';
+import { FileText, ArrowRight, Zap, Wrench, Clock, LogOut, Shield, Loader2, Highlighter, ShieldCheck, BarChart3, DollarSign, FolderOpen } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 // Catalog of apps shown on the splash. `key` matches the server's app keys and
@@ -48,6 +48,14 @@ const APPS = [
     icon: DollarSign,
     live: true,
     path: '/expenses',
+  },
+  {
+    key: 'applications',
+    name: 'Applications',
+    description: 'View and download submitted new-hire application packets (contains sensitive info).',
+    icon: FolderOpen,
+    live: true,
+    path: '/applications',
   },
   {
     key: 'soon-1',

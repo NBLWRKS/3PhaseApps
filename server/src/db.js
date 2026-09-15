@@ -98,6 +98,15 @@ db.exec(`
     created_date TEXT NOT NULL
   );
 
+  -- Employee application packets (submitted filled PDFs, saved to disk).
+  CREATE TABLE IF NOT EXISTS applications (
+    id TEXT PRIMARY KEY,
+    applicant TEXT,
+    lang TEXT,
+    files TEXT NOT NULL DEFAULT '[]',
+    created_date TEXT NOT NULL
+  );
+
   -- Project Tracking: Project -> Area -> Task hierarchy.
   CREATE TABLE IF NOT EXISTS tracking_projects (
     id TEXT PRIMARY KEY,

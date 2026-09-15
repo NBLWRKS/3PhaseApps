@@ -6,7 +6,7 @@ import { canRead, canEdit } from '@/lib/permissions';
 import {
   Plus, Trash2, ChevronDown, Loader2, LayoutDashboard, Table2,
   Download, Upload, DollarSign, FolderPlus, CalendarPlus, Zap, Wrench,
-  Package, Truck, Users, Pencil, FileText, Wallet, Clock,
+  Package, Truck, Users, Pencil, FileText, Wallet, Clock, X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.jpg';
@@ -368,23 +368,25 @@ function StatTile({ icon: Icon, label, value, sub, tint, value_tint }) {
   );
 }
 
-function CatBudget({ data, meta }) {
+function CatBudget({ data, meta, onClick }) {
   const [, label, Icon, tint] = meta;
   return (
-    <div className="rounded-xl border border-border bg-background p-3">
+    <button type="button" onClick={onClick}
+      className="text-left rounded-xl border border-border bg-background p-3 hover:border-primary/60 hover:bg-secondary/40 transition cursor-pointer w-full">
       <div className="flex items-center gap-1.5 mb-1.5">
         <Icon className="w-3.5 h-3.5 flex-none" style={{ color: tint }} />
         <span className="text-xs font-medium text-muted-foreground truncate">{label}</span>
       </div>
       <div className="text-lg font-bold tabular-nums" style={{ color: tint }}>{money(data.spend || 0)}</div>
-      <div className="text-[11px] text-muted-foreground mt-0.5">spent</div>
-    </div>
+      <div className="text-[11px] text-muted-foreground mt-0.5">spent · view weeks</div>
+    </button>
   );
 }
 
 function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onImport, onAddCategory, onAddCO, onSaveCO, onDelCO, onAddPO, onSavePO, onDelPO, onAddRental, onSaveRental, onDelRental }) {
   const t = p.totals || {};
   const bud = p.budgets || {};
+  const [drillCat, setDrillCat] = React.useState(null); // BUDGET_CATS meta for the open modal
   return (
     <div className="space-y-5">
       {/* Project header + actions */}
@@ -422,7 +424,7 @@ function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, 
           {editable && <button onClick={onEditBudget} className="text-xs text-primary hover:underline font-medium">Edit budget</button>}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {BUDGET_CATS.map((meta) => <CatBudget key={meta[0]} data={bud[meta[0]] || {}} meta={meta} />)}
+          {BUDGET_CATS.map((meta) => <CatBudget key={meta[0]} data={bud[meta[0]] || {}} meta={meta} onClick={() => setDrillCat(meta)} />)}
         </div>
       </div>
 
@@ -447,6 +449,76 @@ function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, 
       </div>
 
       <ChangeOrders project={p} editable={editable} onAddCO={onAddCO} onSaveCO={onSaveCO} onDelCO={onDelCO} />
+
+      {drillCat && <CategoryDrillModal project={p} meta={drillCat} onClose={() => setDrillCat(null)} />}
+    </div>
+  );
+}
+
+// Which per-week value a category maps to. Payroll categories are single fields;
+// the rest are summed from the week's expense line items by category name.
+const CAT_WEEK = {
+  elec: { kind: 'pay', field: 'elec_pay' },
+  mech: { kind: 'pay', field: 'mech_pay' },
+  staff_elec: { kind: 'pay', field: 'staff_elec_pay' },
+  staff_mech: { kind: 'pay', field: 'staff_mech_pay' },
+  materials_elec: { kind: 'items', match: 'Materials – Electrical' },
+  materials_mech: { kind: 'items', match: 'Materials – Mechanical' },
+  rental: { kind: 'items', match: 'Equipment Rental' },
+  other: { kind: 'items', match: 'Other' },
+};
+
+function CategoryDrillModal({ project: p, meta, onClose }) {
+  const [key, label, Icon, tint] = meta;
+  const cfg = CAT_WEEK[key] || {};
+  // Build per-week rows that contributed to this category.
+  const rows = [];
+  for (const w of p.weeks || []) {
+    if (cfg.kind === 'pay') {
+      const amt = Number(w[cfg.field]) || 0;
+      if (amt) rows.push({ week: w.week_ending, amount: amt, items: [] });
+    } else {
+      const items = (w.items || []).filter((it) => it.category === cfg.match && (Number(it.amount) || 0) !== 0);
+      const amt = items.reduce((s, it) => s + (Number(it.amount) || 0), 0);
+      if (amt) rows.push({ week: w.week_ending, amount: amt, items });
+    }
+  }
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl bg-card border border-border shadow-xl p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-lg font-bold flex items-center gap-2"><Icon className="w-5 h-5" style={{ color: tint }} /> {label}</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="w-5 h-5" /></button>
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">{p.name} · {rows.length} week{rows.length === 1 ? '' : 's'} with a charge · <span className="font-semibold text-foreground">{money(total)}</span> total</p>
+
+        {rows.length === 0 ? (
+          <div className="text-sm text-muted-foreground py-8 text-center">No charges in this category yet.</div>
+        ) : (
+          <div className="space-y-2">
+            {rows.map((r) => (
+              <div key={r.week} className="rounded-lg border border-border">
+                <div className="flex items-center justify-between px-3 py-2 bg-secondary/40">
+                  <span className="text-sm font-medium tabular-nums">{r.week}</span>
+                  <span className="text-sm font-bold tabular-nums">{money(r.amount)}</span>
+                </div>
+                {r.items.length > 0 && (
+                  <div className="divide-y divide-border">
+                    {r.items.map((it) => (
+                      <div key={it.id} className="flex items-center justify-between px-3 py-1.5 text-sm">
+                        <span className="text-muted-foreground truncate pr-2">{it.description || <span className="italic">no description</span>}</span>
+                        <span className="tabular-nums flex-none">{money(it.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
