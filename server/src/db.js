@@ -107,6 +107,30 @@ db.exec(`
     created_date TEXT NOT NULL
   );
 
+  -- Onboarding training courses (each is an uploaded PDF deck).
+  CREATE TABLE IF NOT EXISTS onboarding_courses (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    stored_file TEXT,                    -- filename on disk (PDF)
+    original_name TEXT,
+    archived INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT,
+    created_date TEXT NOT NULL,
+    updated_date TEXT NOT NULL
+  );
+
+  -- Per-employee course completions (the checkmarks).
+  CREATE TABLE IF NOT EXISTS onboarding_completions (
+    id TEXT PRIMARY KEY,
+    employee_id TEXT NOT NULL,
+    course_id TEXT NOT NULL,
+    completed_date TEXT NOT NULL,
+    source TEXT,                         -- 'self' (via /onboarding) | 'admin' (manual check)
+    created_by TEXT,
+    UNIQUE(employee_id, course_id)
+  );
+
   -- Project Tracking: Project -> Area -> Task hierarchy.
   CREATE TABLE IF NOT EXISTS tracking_projects (
     id TEXT PRIMARY KEY,

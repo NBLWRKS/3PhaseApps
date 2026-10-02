@@ -191,6 +191,34 @@ const safety = {
   deleteRecord: (id) => request('DELETE', `/safety/records/${id}`),
 };
 
+const onboarding = {
+  // Public (no auth) — used by the /onboarding page
+  publicEmployees: async () => (await fetch(`${API_BASE}/onboarding/public/employees`)).json(),
+  publicCourses: async () => (await fetch(`${API_BASE}/onboarding/public/courses`)).json(),
+  publicCompletions: async (employeeId) => (await fetch(`${API_BASE}/onboarding/public/completions/${employeeId}`)).json(),
+  courseFileUrl: (courseId) => `${API_BASE}/onboarding/public/course-file/${courseId}`,
+  complete: async (employee_id, course_id) => {
+    const res = await fetch(`${API_BASE}/onboarding/public/complete`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employee_id, course_id }),
+    });
+    if (!res.ok) throw new Error('Failed to record completion');
+    return res.json();
+  },
+  // Gated (onboarding permission)
+  listCourses: () => request('GET', '/onboarding/courses'),
+  uploadCourse: async (name, file) => {
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('file', file);
+    return request('POST', '/onboarding/courses', { body: fd, isForm: true });
+  },
+  renameCourse: (id, name) => request('PUT', `/onboarding/courses/${id}`, { body: { name } }),
+  deleteCourse: (id) => request('DELETE', `/onboarding/courses/${id}`),
+  grid: () => request('GET', '/onboarding/grid'),
+  setCheck: (employee_id, course_id, completed) => request('POST', '/onboarding/check', { body: { employee_id, course_id, completed } }),
+};
+
 const tracking = {
   summary: (projectId) => request('GET', '/tracking/summary' + (projectId ? `?project=${projectId}` : '')),
   listProjects: () => request('GET', '/tracking/projects'),
@@ -245,6 +273,7 @@ export const base44 = {
   admin,
   highlight,
   safety,
+  onboarding,
   tracking,
   expenses,
   _getToken: getToken,

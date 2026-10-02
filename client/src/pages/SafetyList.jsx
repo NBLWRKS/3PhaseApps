@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { canRead, canEdit } from '@/lib/permissions';
 import { Navigate } from 'react-router-dom';
-import { Search, Plus, ShieldCheck, ChevronRight, Loader2, Tag, IdCard, CheckSquare, Square, X } from 'lucide-react';
+import { Search, Plus, ShieldCheck, ChevronRight, Loader2, Tag, IdCard, CheckSquare, Square, X, GraduationCap, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.jpg';
 import AppSwitcher from '@/components/layout/AppSwitcher';
@@ -31,6 +31,30 @@ export default function SafetyList() {
   const [genProgress, setGenProgress] = useState('');
 
   const editable = canEdit(user, 'safety');
+  // Onboarding course completions (shown as an optional matrix for users with access).
+  const canSeeOnboarding = canRead(user, 'onboarding');
+  const canEditOnboarding = canEdit(user, 'onboarding');
+  const [showTraining, setShowTraining] = useState(false);
+  const [obCourses, setObCourses] = useState([]);
+  const [obCompletions, setObCompletions] = useState({}); // "empId:courseId" -> truthy
+  const [obLoaded, setObLoaded] = useState(false);
+
+  useEffect(() => {
+    if (showTraining && canSeeOnboarding && !obLoaded) {
+      base44.onboarding.grid()
+        .then((g) => { setObCourses(g.courses || []); setObCompletions(g.completions || {}); setObLoaded(true); })
+        .catch(() => toast.error('Failed to load training data'));
+    }
+  }, [showTraining, canSeeOnboarding, obLoaded]);
+
+  const toggleCheck = async (empId, courseId) => {
+    if (!canEditOnboarding) return;
+    const key = `${empId}:${courseId}`;
+    const nowComplete = !obCompletions[key];
+    setObCompletions((m) => ({ ...m, [key]: nowComplete ? { completed_date: new Date().toISOString(), source: 'admin' } : undefined }));
+    try { await base44.onboarding.setCheck(empId, courseId, nowComplete); }
+    catch { toast.error('Failed to update'); setObCompletions((m) => ({ ...m, [key]: !nowComplete })); }
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -139,6 +163,14 @@ export default function SafetyList() {
             >
               <Tag className="w-4 h-4" /> <span className="hidden sm:inline">Training types</span>
             </button>
+            {canSeeOnboarding && (
+              <button
+                onClick={() => setShowTraining((v) => !v)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm ${showTraining ? 'border-primary text-primary bg-primary/5' : 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary'}`}
+              >
+                <GraduationCap className="w-4 h-4" /> <span className="hidden sm:inline">Course completion</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -193,7 +225,48 @@ export default function SafetyList() {
           </div>
         )}
 
-        {loading ? (
+        {showTraining && canSeeOnboarding ? (
+          !obLoaded ? (
+            <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+          ) : obCourses.length === 0 ? (
+            <p className="text-muted-foreground text-center py-16">No training courses yet. Add them in the Onboarding app.</p>
+          ) : (
+            <div className="bg-card border border-border rounded-lg overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left font-semibold px-4 py-2.5 sticky left-0 bg-card z-10">Employee</th>
+                    {obCourses.map((c) => (
+                      <th key={c.id} className="px-3 py-2.5 text-center font-medium text-xs text-muted-foreground whitespace-nowrap">{c.name}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((e) => (
+                    <tr key={e.id} className="border-b border-border last:border-0 hover:bg-secondary/40">
+                      <td className="px-4 py-2 font-medium whitespace-nowrap sticky left-0 bg-card">{e.name}</td>
+                      {obCourses.map((c) => {
+                        const done = !!obCompletions[`${e.id}:${c.id}`];
+                        return (
+                          <td key={c.id} className="px-3 py-2 text-center">
+                            <button
+                              onClick={() => toggleCheck(e.id, c.id)}
+                              disabled={!canEditOnboarding}
+                              title={done ? 'Completed — click to clear' : 'Not completed — click to mark complete'}
+                              className={`inline-flex items-center justify-center w-6 h-6 rounded-md border transition ${done ? 'bg-green-500/15 border-green-500/40 text-green-600' : 'border-border text-transparent hover:border-primary/50'} ${canEditOnboarding ? 'cursor-pointer' : 'cursor-default'}`}
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : loading ? (
           <div className="flex justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
         ) : filtered.length === 0 ? (
           <p className="text-muted-foreground text-center py-16">No employees found.</p>

@@ -49,8 +49,54 @@ router.post('/submit', upload.array('files', 12), (req, res) => {
     created_date: now(),
   };
   db.prepare('INSERT INTO applications (id, applicant, lang, files, created_date) VALUES (@id,@applicant,@lang,@files,@created_date)').run(record);
-  res.json({ ok: true, id: record.id, count: files.length });
+
+  // Auto-create a Safety Credentials employee for this applicant (so they appear
+  // in the onboarding dropdown and the Safety list). Skips if the name is the
+  // generic fallback or a matching active employee already exists.
+  let employeeCreated = false;
+  try {
+    if (applicant && applicant.toLowerCase() !== 'unnamed applicant') {
+      const display = toLastFirst(applicant);          // "First Last" -> "Last, First"
+      const exists = db.prepare('SELECT id FROM employees WHERE lower(name) = lower(?)').get(display);
+      if (!exists) {
+        const slug = uniqueEmployeeSlug(empSlugify(display));
+        const ts = now();
+        db.prepare('INSERT INTO employees (id, name, slug, active, created_date, updated_date) VALUES (?,?,?,1,?,?)')
+          .run(id(), display, slug, ts, ts);
+        employeeCreated = true;
+      }
+    }
+  } catch { /* employee auto-create is best-effort; never block the submission */ }
+
+  res.json({ ok: true, id: record.id, count: files.length, employeeCreated });
 });
+
+// Convert a free-typed "First Last" (or "First M Last") into the Safety list's
+// "Last, First" display convention. If it already contains a comma, leave as-is.
+function toLastFirst(name) {
+  const s = (name || '').trim();
+  if (s.includes(',')) return s;
+  const parts = s.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return s;
+  const last = parts[parts.length - 1];
+  const first = parts.slice(0, parts.length - 1).join(' ');
+  return `${last}, ${first}`;
+}
+// Mirror of the Safety slug logic (First+Last, PascalCase, ASCII only).
+function empSlugify(name) {
+  const parts = name.split(',').map((x) => x.trim());
+  const first = (parts[1] || '').trim();
+  const last = (parts[0] || '').trim();
+  const ordered = `${first} ${last}`.trim();
+  return ordered.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9 ]/g, '').split(/\s+/).filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+}
+function uniqueEmployeeSlug(base) {
+  let slug = base || 'employee'; let s = slug; let n = 2;
+  while (db.prepare('SELECT id FROM employees WHERE slug = ?').get(s)) s = `${slug}${n++}`;
+  return s;
+}
 
 // ===== GATED: list submissions =====
 router.get('/', authRequired, appReadRequired('applications'), (_req, res) => {
