@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { PACKET } from '@/lib/applicationPacket';
 import { buildFilledPdfs, fieldId } from '@/lib/fillPacket';
-import { CheckCircle2, Circle, ChevronLeft, ChevronRight, Loader2, Download, FileText } from 'lucide-react';
+import { CheckCircle2, Circle, ChevronLeft, ChevronRight, Loader2, Download, FileText, ArrowRight } from 'lucide-react';
 import logo from '@/assets/logo.jpg';
 
 const T = {
@@ -87,6 +87,11 @@ export default function ApplyPacket() {
                   : "We couldn't submit your packet automatically. Your PDFs downloaded to this device — please hand them to HR.")}
           </p>
           <div className="flex flex-col gap-2 max-w-xs mx-auto">
+            {submitOk && (
+              <a href="/onboarding" className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-navy text-white font-semibold">
+                {lang === 'es' ? 'Continuar a la capacitación' : 'Continue to Training'} <ArrowRight className="w-4 h-4" />
+              </a>
+            )}
             <button onClick={() => downloadAll(filled)} className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-border text-sm">
               <Download className="w-4 h-4" /> {t.redownload}
             </button>
