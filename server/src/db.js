@@ -311,6 +311,24 @@ ensureColumn('expense_weeks', 'staff_elec_pay', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('expense_weeks', 'staff_elec_hours', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('expense_weeks', 'staff_mech_pay', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('expense_weeks', 'staff_mech_hours', 'REAL NOT NULL DEFAULT 0');
+// Onboarding: built-in (slide + quiz) courses shipped with the app, and quiz scores.
+ensureColumn('onboarding_courses', 'slug', 'TEXT');
+ensureColumn('onboarding_courses', 'builtin', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('onboarding_completions', 'score', 'INTEGER');   // quiz % (null = no quiz)
+ensureColumn('onboarding_completions', 'lang', 'TEXT');       // 'en' | 'es'
+db.exec(`
+  CREATE TABLE IF NOT EXISTS onboarding_quiz_attempts (
+    id TEXT PRIMARY KEY,
+    employee_id TEXT NOT NULL,
+    course_id TEXT NOT NULL,
+    lang TEXT,
+    score INTEGER NOT NULL,              -- percent
+    correct INTEGER NOT NULL,
+    total INTEGER NOT NULL,
+    passed INTEGER NOT NULL,
+    created_date TEXT NOT NULL
+  );
+`);
 
 // --- Seed Safety Credentials data on first run (only if employees is empty) ---
 function slugify(name) {

@@ -3,7 +3,7 @@ import { Navigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { canRead, canEdit } from '@/lib/permissions';
-import { Loader2, Upload, Trash2, Pencil, FileText, GraduationCap, ExternalLink } from 'lucide-react';
+import { Loader2, Upload, Trash2, Pencil, FileText, GraduationCap, ExternalLink, Presentation, EyeOff, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.jpg';
 import AppSwitcher from '@/components/layout/AppSwitcher';
@@ -11,6 +11,7 @@ import AppSwitcher from '@/components/layout/AppSwitcher';
 export default function OnboardingAdmin() {
   const { user, loading } = useAuth();
   const [courses, setCourses] = useState([]);
+  const [hidden, setHidden] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [name, setName] = useState('');
@@ -24,6 +25,7 @@ export default function OnboardingAdmin() {
       .then((c) => setCourses(Array.isArray(c) ? c : []))
       .catch(() => toast.error('Failed to load courses'))
       .finally(() => setLoadingData(false));
+    base44.onboarding.hiddenCourses().then((h) => setHidden(Array.isArray(h) ? h : [])).catch(() => setHidden([]));
   }, []);
 
   useEffect(() => { if (canRead(user, 'onboarding')) load(); }, [user, load]);
@@ -47,8 +49,14 @@ export default function OnboardingAdmin() {
     if (n === null || !n.trim() || n.trim() === c.name) return;
     try { await base44.onboarding.renameCourse(c.id, n.trim()); load(); } catch { toast.error('Rename failed'); }
   };
+  const restore = async (c) => {
+    try { await base44.onboarding.restoreCourse(c.id); load(); } catch { toast.error('Restore failed'); }
+  };
   const del = async (c) => {
-    if (!confirm(`Delete "${c.name}"? This removes the file and all completion records for it.`)) return;
+    const msg = c.builtin
+      ? `Hide "${c.name}" from the onboarding page? Completion records are kept and you can restore it later.`
+      : `Delete "${c.name}"? This removes the file and all completion records for it.`;
+    if (!confirm(msg)) return;
     try { await base44.onboarding.deleteCourse(c.id); load(); } catch { toast.error('Delete failed'); }
   };
 
@@ -68,7 +76,7 @@ export default function OnboardingAdmin() {
         <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
           <div>
             <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><GraduationCap className="w-6 h-6 text-primary" /> Onboarding Courses</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Upload training decks (PDF). Employees complete them at the public onboarding page.</p>
+            <p className="text-sm text-muted-foreground mt-0.5">Built-in courses (English &amp; Spanish slides + quiz) ship with the app. You can also upload extra PDF decks. Employees complete them at the public onboarding page.</p>
           </div>
           <a href="/onboarding" target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-sm text-muted-foreground hover:text-foreground hover:bg-secondary">
             <ExternalLink className="w-4 h-4" /> Open public page
@@ -107,16 +115,34 @@ export default function OnboardingAdmin() {
           <div className="space-y-2.5">
             {courses.map((c) => (
               <div key={c.id} className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">
-                <FileText className="w-5 h-5 text-muted-foreground flex-none" />
+                {c.kind === 'slides' ? <Presentation className="w-5 h-5 text-primary flex-none" /> : <FileText className="w-5 h-5 text-muted-foreground flex-none" />}
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold truncate">{c.name}</div>
-                  <div className="text-xs text-muted-foreground truncate">{c.original_name || 'course.pdf'}</div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    {c.kind === 'slides'
+                      ? `Built-in · English ${c.slides.en} / Español ${c.slides.es} slides${c.quiz ? ` · Quiz ${c.quiz.questions} Q (pass ${c.quiz.pass_pct}%)` : ' · Acknowledgement only'}`
+                      : (c.original_name || 'course.pdf')}
+                  </div>
                 </div>
-                <a href={base44.onboarding.courseFileUrl(c.id)} target="_blank" rel="noreferrer" className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary" title="Preview"><ExternalLink className="w-4 h-4" /></a>
+                <a href={c.kind === 'slides' ? base44.onboarding.slideUrl(c.slug, 'en', 1) : base44.onboarding.courseFileUrl(c.id)} target="_blank" rel="noreferrer" className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary" title="Preview"><ExternalLink className="w-4 h-4" /></a>
                 {editable && <button onClick={() => rename(c)} className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary" title="Rename"><Pencil className="w-4 h-4" /></button>}
-                {editable && <button onClick={() => del(c)} className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-secondary" title="Delete"><Trash2 className="w-4 h-4" /></button>}
+                {editable && <button onClick={() => del(c)} className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-secondary" title={c.builtin ? 'Hide' : 'Delete'}>{c.builtin ? <EyeOff className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}</button>}
               </div>
             ))}
+          </div>
+        )}
+        {editable && hidden.length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Hidden built-in courses</h3>
+            <div className="space-y-2">
+              {hidden.map((c) => (
+                <div key={c.id} className="flex items-center gap-3 rounded-xl border border-dashed border-border bg-card/50 px-4 py-2.5">
+                  <EyeOff className="w-4 h-4 text-muted-foreground flex-none" />
+                  <div className="flex-1 min-w-0 text-sm truncate">{c.name}</div>
+                  <button onClick={() => restore(c)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm hover:bg-secondary"><RotateCcw className="w-3.5 h-3.5" /> Restore</button>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </main>

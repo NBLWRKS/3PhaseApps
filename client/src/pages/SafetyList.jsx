@@ -246,13 +246,14 @@ export default function SafetyList() {
                     <tr key={e.id} className="border-b border-border last:border-0 hover:bg-secondary/40">
                       <td className="px-4 py-2 font-medium whitespace-nowrap sticky left-0 bg-card">{e.name}</td>
                       {obCourses.map((c) => {
-                        const done = !!obCompletions[`${e.id}:${c.id}`];
+                        const rec = obCompletions[`${e.id}:${c.id}`];
+                        const done = !!rec;
                         return (
                           <td key={c.id} className="px-3 py-2 text-center">
                             <button
                               onClick={() => toggleCheck(e.id, c.id)}
                               disabled={!canEditOnboarding}
-                              title={done ? 'Completed — click to clear' : 'Not completed — click to mark complete'}
+                              title={done ? `Completed${rec.completed_date ? ` ${rec.completed_date.slice(0, 10)}` : ''}${rec.score != null ? ` · quiz ${rec.score}%` : ''}${rec.lang ? ` · ${rec.lang === 'es' ? 'Spanish' : 'English'}` : ''}${canEditOnboarding ? ' — click to clear' : ''}` : 'Not completed — click to mark complete'}
                               className={`inline-flex items-center justify-center w-6 h-6 rounded-md border transition ${done ? 'bg-green-500/15 border-green-500/40 text-green-600' : 'border-border text-transparent hover:border-primary/50'} ${canEditOnboarding ? 'cursor-pointer' : 'cursor-default'}`}
                             >
                               <Check className="w-4 h-4" />

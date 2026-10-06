@@ -197,14 +197,31 @@ const onboarding = {
   publicCourses: async () => (await fetch(`${API_BASE}/onboarding/public/courses`)).json(),
   publicCompletions: async (employeeId) => (await fetch(`${API_BASE}/onboarding/public/completions/${employeeId}`)).json(),
   courseFileUrl: (courseId) => `${API_BASE}/onboarding/public/course-file/${courseId}`,
-  complete: async (employee_id, course_id) => {
+  complete: async (employee_id, course_id, lang) => {
     const res = await fetch(`${API_BASE}/onboarding/public/complete`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ employee_id, course_id }),
+      body: JSON.stringify({ employee_id, course_id, lang }),
     });
     if (!res.ok) throw new Error('Failed to record completion');
     return res.json();
   },
+  // Built-in slide courses: images ship with the frontend under /trainings.
+  slideUrl: (slug, lang, n) => `/trainings/${slug}/${lang}/${String(n).padStart(2, '0')}.jpg`,
+  quiz: async (courseId, lang) => {
+    const res = await fetch(`${API_BASE}/onboarding/public/quiz/${courseId}?lang=${lang}`);
+    if (!res.ok) throw new Error('Failed to load quiz');
+    return res.json();
+  },
+  submitQuiz: async (courseId, employee_id, lang, answers) => {
+    const res = await fetch(`${API_BASE}/onboarding/public/quiz/${courseId}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employee_id, lang, answers }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Failed to submit quiz');
+    return res.json();
+  },
+  hiddenCourses: () => request('GET', '/onboarding/courses/hidden'),
+  restoreCourse: (id) => request('POST', `/onboarding/courses/${id}/restore`),
   // Gated (onboarding permission)
   listCourses: () => request('GET', '/onboarding/courses'),
   uploadCourse: async (name, file) => {
