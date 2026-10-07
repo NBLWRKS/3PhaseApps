@@ -27,9 +27,17 @@ const LANGS = ['en', 'es'];
 const pickLang = (l) => (LANGS.includes(l) ? l : 'en');
 
 (function seedBuiltinCourses() {
+  // Built-in courses dropped from the manifest are hidden (completion records kept).
+  const slugs = BUILTIN.map((c) => c.slug);
+  for (const row of db.prepare('SELECT id, slug FROM onboarding_courses WHERE builtin = 1 AND archived = 0').all()) {
+    if (!slugs.includes(row.slug)) db.prepare('UPDATE onboarding_courses SET archived = 1, updated_date = ? WHERE id = ?').run(new Date().toISOString(), row.id);
+  }
   BUILTIN.forEach((c, i) => {
     const existing = db.prepare('SELECT id FROM onboarding_courses WHERE slug = ?').get(c.slug);
-    if (existing) return; // keep any rename/hide an admin made
+    if (existing) { // keep any rename/hide an admin made; just follow the manifest order
+      db.prepare('UPDATE onboarding_courses SET sort_order = ? WHERE id = ?').run(i - 1000, existing.id);
+      return;
+    }
     db.prepare(`INSERT INTO onboarding_courses (id,name,stored_file,original_name,archived,sort_order,created_by,created_date,updated_date,slug,builtin)
       VALUES (?,?,NULL,NULL,0,?,'system',?,?,?,1)`).run(crypto.randomBytes(12).toString('hex'), c.name.en, i - 1000, new Date().toISOString(), new Date().toISOString(), c.slug);
   });
@@ -160,10 +168,13 @@ router.get('/courses', authRequired, appReadRequired('onboarding'), (_req, res) 
 
 // Hidden built-in courses (so an admin can bring one back).
 router.get('/courses/hidden', authRequired, appReadRequired('onboarding'), (_req, res) => {
-  res.json(db.prepare('SELECT id, name, slug FROM onboarding_courses WHERE archived = 1 AND builtin = 1 ORDER BY sort_order').all());
+  res.json(db.prepare('SELECT id, name, slug FROM onboarding_courses WHERE archived = 1 AND builtin = 1 ORDER BY sort_order').all()
+    .filter((c) => builtinBySlug[c.slug])); // retired courses can't be restored
 });
 router.post('/courses/:id/restore', authRequired, appEditRequired('onboarding'), (req, res) => {
-  db.prepare('UPDATE onboarding_courses SET archived = 0, updated_date = ? WHERE id = ? AND builtin = 1').run(now(), req.params.id);
+  const c = db.prepare('SELECT slug FROM onboarding_courses WHERE id = ? AND builtin = 1').get(req.params.id);
+  if (!c || !builtinBySlug[c.slug]) return res.status(400).json({ error: 'This course is no longer available' });
+  db.prepare('UPDATE onboarding_courses SET archived = 0, updated_date = ? WHERE id = ?').run(now(), req.params.id);
   res.json({ ok: true });
 });
 
