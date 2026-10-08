@@ -229,14 +229,16 @@ export default function Expenses() {
 function BudgetModal({ project, onClose, onSaved }) {
   const isNew = !project;
   const [name, setName] = useState(project?.name || '');
-  const [budget, setBudget] = useState(project?.budget_total || '');
+  const [elec, setElec] = useState(project?.budget_elec || '');
+  const [mech, setMech] = useState(project?.budget_mech || '');
   const [saving, setSaving] = useState(false);
+  const legacy = !!project?.trades?.budget_split_needed;
 
   const save = async () => {
     if (isNew && !name.trim()) { toast.error('Enter a project name'); return; }
     setSaving(true);
     try {
-      const payload = { budget_total: num(budget) };
+      const payload = { budget_elec: num(elec), budget_mech: num(mech) };
       if (isNew) await base44.expenses.addProject({ name: name.trim(), ...payload });
       else await base44.expenses.updateProject(project.id, payload);
       onSaved();
@@ -247,7 +249,12 @@ function BudgetModal({ project, onClose, onSaved }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-card border border-border shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold mb-1">{isNew ? 'New Project' : `Budget — ${project.name}`}</h2>
-        <p className="text-xs text-muted-foreground mb-4">Set the overall project budget. All spend is measured against this total.</p>
+        <p className="text-xs text-muted-foreground mb-4">Set the Electrical and Mechanical budgets. Each trade's payroll, staffing, materials and tagged expenses are measured against its own budget; the overall budget is the two combined.</p>
+        {legacy && (
+          <div className="text-xs rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 mb-4">
+            This project has a single overall budget of <span className="font-semibold">{money(project.budget_total)}</span> from before the split. Enter the Electrical and Mechanical amounts to replace it.
+          </div>
+        )}
         {isNew && (
           <div className="mb-4">
             <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Project name</label>
@@ -255,14 +262,22 @@ function BudgetModal({ project, onClose, onSaved }) {
               className="w-full mt-1 bg-background border border-border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
         )}
-        <div>
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Overall budget</label>
-          <div className="inline-flex items-center rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-primary/30 w-full mt-1">
-            <span className="pl-3 text-muted-foreground">$</span>
-            <input type="number" step="any" value={budget} placeholder="0" autoFocus={!isNew}
-              onChange={(e) => setBudget(e.target.value)}
-              className="w-full bg-transparent outline-none px-2 py-2 text-sm tabular-nums" />
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {[['Electrical budget', elec, setElec, Zap, 'hsl(208 75% 42%)'], ['Mechanical budget', mech, setMech, Wrench, 'hsl(160 84% 34%)']].map(([label, val, set, Icon, tint], i) => (
+            <div key={label}>
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1"><Icon className="w-3.5 h-3.5" style={{ color: tint }} /> {label}</label>
+              <div className="inline-flex items-center rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-primary/30 w-full mt-1">
+                <span className="pl-3 text-muted-foreground">$</span>
+                <input type="number" step="any" inputMode="decimal" value={val} placeholder="0" autoFocus={!isNew && i === 0}
+                  onChange={(e) => set(e.target.value)}
+                  className="w-full bg-transparent outline-none px-2 py-2 text-sm tabular-nums" />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center justify-between text-sm mt-3 px-1">
+          <span className="text-muted-foreground">Overall budget</span>
+          <span className="font-semibold tabular-nums">{money(num(elec) + num(mech))}</span>
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary">Cancel</button>
@@ -368,6 +383,44 @@ function StatTile({ icon: Icon, label, value, sub, tint, value_tint }) {
   );
 }
 
+const fmtHrs = (n) => (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
+
+function TradeBudgetTile({ label, icon: Icon, tr = {}, legacy }) {
+  const has = !legacy && (tr.budget || 0) > 0;
+  const color = has ? budgetColor(tr.pct) : 'hsl(var(--muted-foreground))';
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-sm relative overflow-hidden">
+      <div className="absolute inset-y-0 right-0 w-1" style={{ backgroundColor: color }} />
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</span>
+        <Icon className="w-4 h-4" style={{ color }} />
+      </div>
+      <div className="text-2xl font-bold mt-1.5 tabular-nums" style={has ? { color } : undefined}>{has ? `${tr.pct}%` : '—'}</div>
+      <div className="text-xs text-muted-foreground mt-0.5">
+        {has ? <>{money(tr.spend)} of {money(tr.budget)} · {money(tr.remaining)} left</> : <>{money(tr.spend)} spent · {legacy ? 'split budget to track' : 'no budget set'}</>}
+      </div>
+      {has && (
+        <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-2">
+          <div className="h-full rounded-full" style={{ width: `${Math.min(100, tr.pct)}%`, backgroundColor: color }} />
+        </div>
+      )}
+      {(tr.change_orders || 0) !== 0 && <div className="text-[11px] text-muted-foreground mt-1">incl. {money(tr.change_orders)} change orders</div>}
+    </div>
+  );
+}
+
+const TRADES = ['Electrical', 'Mechanical'];
+function TradeSelect({ value, onChange, className = '' }) {
+  return (
+    <select value={value || ''} onChange={(e) => onChange(e.target.value || null)} aria-label="Trade"
+      className={`bg-card border rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-primary/30 ${value ? 'border-border' : 'border-amber-500/60 text-amber-700'} ${className}`}>
+      <option value="">Pick trade…</option>
+      {TRADES.map((t) => <option key={t} value={t}>{t}</option>)}
+    </select>
+  );
+}
+const isMaterials = (cat) => cat === 'Materials – Electrical' || cat === 'Materials – Mechanical';
+
 function CatBudget({ data, meta, onClick }) {
   const [, label, Icon, tint] = meta;
   return (
@@ -385,6 +438,7 @@ function CatBudget({ data, meta, onClick }) {
 
 function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onImport, onAddCategory, onAddCO, onSaveCO, onDelCO, onAddPO, onSavePO, onDelPO, onAddRental, onSaveRental, onDelRental }) {
   const t = p.totals || {};
+  const tr = p.trades || {};
   const bud = p.budgets || {};
   const [drillCat, setDrillCat] = React.useState(null); // BUDGET_CATS meta for the open modal
   return (
@@ -405,17 +459,26 @@ function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, 
         )}
       </div>
 
-      {/* KPI stat tiles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* KPI stat tiles: overall, then one budget + one man-hours tile per trade */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <StatTile icon={DollarSign} label="Total spend" value={money(t.total)}
-          sub={t.budget > 0 ? `of ${money(t.budget)} budget` : 'no budget set'} tint="hsl(208 75% 55%)" />
-        <StatTile icon={Wallet} label="Budget used" value={t.budget > 0 ? `${t.budget_pct}%` : '—'}
-          sub={t.budget > 0 ? `${money(t.budget_remaining)} remaining` : 'set budgets to track'}
-          tint={t.budget > 0 ? budgetColor(t.budget_pct) : 'hsl(var(--muted-foreground))'}
-          value_tint={t.budget > 0 ? budgetColor(t.budget_pct) : undefined} />
-        <StatTile icon={Clock} label="Man hours" value={(t.hours || 0).toLocaleString()} sub="own crew + staffing" tint="hsl(38 92% 55%)" />
+          sub={t.budget > 0 ? `${t.budget_pct}% of ${money(t.budget)} overall budget` : 'no budget set'}
+          tint={t.budget > 0 ? budgetColor(t.budget_pct) : 'hsl(208 75% 55%)'} />
+        <TradeBudgetTile label="Electrical budget" icon={Zap} tr={tr.elec} legacy={tr.budget_split_needed} />
+        <TradeBudgetTile label="Mechanical budget" icon={Wrench} tr={tr.mech} legacy={tr.budget_split_needed} />
         <StatTile icon={Users} label="Payroll" value={money(t.payroll)} sub="own + staffing" tint="hsl(160 84% 42%)" />
+        <StatTile icon={Clock} label="Electrical man hours" value={fmtHrs(tr.elec?.hours)}
+          sub={`${fmtHrs(tr.elec?.own_hours)} own + ${fmtHrs(tr.elec?.staff_hours)} staffing`} tint="hsl(208 75% 42%)" />
+        <StatTile icon={Clock} label="Mechanical man hours" value={fmtHrs(tr.mech?.hours)}
+          sub={`${fmtHrs(tr.mech?.own_hours)} own + ${fmtHrs(tr.mech?.staff_hours)} staffing`} tint="hsl(160 84% 34%)" />
       </div>
+      {(tr.budget_split_needed || (tr.unassigned?.spend || 0) > 0 || (tr.unassigned?.change_orders || 0) > 0) && (
+        <div className="text-xs rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 space-y-0.5">
+          {tr.budget_split_needed && <div>This project still has one overall budget ({money(t.base_budget)}). {editable ? <button onClick={onEditBudget} className="font-semibold underline">Split it into Electrical and Mechanical</button> : 'Ask an editor to split it into Electrical and Mechanical.'}</div>}
+          {(tr.unassigned?.spend || 0) > 0 && <div><span className="font-semibold">{money(tr.unassigned.spend)}</span> of rentals / expense lines has no trade, so it counts toward the total only. Pick a trade on those lines below.</div>}
+          {(tr.unassigned?.change_orders || 0) > 0 && <div><span className="font-semibold">{money(tr.unassigned.change_orders)}</span> of change orders has no trade, so it raises the overall budget only.</div>}
+        </div>
+      )}
 
       {/* Budget vs. actual — distinct lighter panel */}
       <div className="rounded-2xl border border-border bg-secondary/40 p-4 shadow-sm">
@@ -532,7 +595,7 @@ function ChangeOrders({ project: p, editable, onAddCO, onSaveCO, onDelCO }) {
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-muted-foreground" />
           <span className="text-sm font-semibold">Change Orders</span>
-          <span className="text-xs text-muted-foreground">(tracked separately from project spend)</span>
+          <span className="text-xs text-muted-foreground">(adds to its trade's budget)</span>
         </div>
         <div className="flex items-center gap-4 text-xs">
           <span className="text-muted-foreground">Man hrs <span className="font-semibold text-foreground tabular-nums">{t.man_hours || 0}</span></span>
@@ -550,6 +613,7 @@ function ChangeOrders({ project: p, editable, onAddCO, onSaveCO, onDelCO }) {
               <tr className="text-xs text-muted-foreground border-b border-border bg-secondary/20">
                 <th className="text-left font-medium px-3 py-1.5 w-40">CO # / Name</th>
                 <th className="text-left font-medium px-2 py-1.5 w-36">Date</th>
+                <th className="text-left font-medium px-2 py-1.5 w-36">Trade</th>
                 <th className="text-left font-medium px-2 py-1.5 w-24">Man hrs</th>
                 <th className="text-left font-medium px-2 py-1.5 w-32">Equipment $</th>
                 <th className="text-left font-medium px-2 py-1.5 w-32">Total $</th>
@@ -568,6 +632,9 @@ function ChangeOrders({ project: p, editable, onAddCO, onSaveCO, onDelCO }) {
                     {editable ? <input type="date" defaultValue={c.co_date || ''}
                       onBlur={(e) => (e.target.value || '') !== (c.co_date || '') && onSaveCO(c, { co_date: e.target.value })}
                       className="bg-card border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-primary/30" /> : <span>{c.co_date || '—'}</span>}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    {editable ? <TradeSelect value={c.trade} onChange={(v) => onSaveCO(c, { trade: v })} /> : <span>{c.trade || '—'}</span>}
                   </td>
                   <td className="px-2 py-1.5">
                     {editable ? <NumInput value={c.man_hours} onCommit={(v) => onSaveCO(c, { man_hours: v })} /> : <span className="tabular-nums">{c.man_hours}</span>}
@@ -623,7 +690,7 @@ function Rentals({ project: p, editable, onAddRental, onSaveRental, onDelRental 
                 <tr key={r.id} className={`${i % 2 ? 'bg-secondary/20' : ''}`}>
                   <td className="px-3 py-1.5 font-medium">{r.equipment_type || '—'}</td>
                   <td className="px-2 py-1.5 text-muted-foreground">{r.serial_number || '—'}</td>
-                  <td className="px-2 py-1.5">{r.trade || '—'}</td>
+                  <td className="px-2 py-1.5">{editable ? <TradeSelect value={r.trade} onChange={(v) => onSaveRental(r, { trade: v })} /> : (r.trade || '—')}</td>
                   <td className="px-2 py-1.5 tabular-nums">{r.date_delivered || '—'}</td>
                   <td className="px-2 py-1.5">
                     {r.date_returned
@@ -675,7 +742,7 @@ function RentalModal({ project, rentalTypes, onAddType, onClose, onSaved }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="w-full max-w-lg rounded-2xl bg-card border border-border shadow-xl p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold mb-1 flex items-center gap-2"><Truck className="w-5 h-5" /> Add Rental — {project.name}</h2>
-        <p className="text-xs text-muted-foreground mb-4">Cost counts toward Equipment Rental spend.</p>
+        <p className="text-xs text-muted-foreground mb-4">Cost counts toward Equipment Rental spend and the chosen trade's budget.</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {field('Equipment', (
             <div className="flex gap-2">
@@ -888,6 +955,12 @@ function WeekCard({ week: w, editable, categories, onSaveWeek, onDelWeek, onAddI
                             {[...new Set([it.category, ...categories])].map((c) => <option key={c} value={c}>{c}</option>)}
                           </select>
                         ) : <span className="font-medium">{it.category}</span>}
+                      </td>
+                      <td className="py-1.5 px-2 w-40">
+                        {isMaterials(it.category)
+                          ? <span className="text-xs text-muted-foreground px-1">{it.category.endsWith('Electrical') ? 'Electrical' : 'Mechanical'}</span>
+                          : editable ? <TradeSelect value={it.trade} onChange={(v) => onSaveItem(it, { trade: v })} className="w-full" />
+                          : <span className="text-muted-foreground">{it.trade || '—'}</span>}
                       </td>
                       <td className="py-1.5 px-2">
                         {editable ? (

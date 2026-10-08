@@ -15,6 +15,21 @@ const id = () => crypto.randomBytes(12).toString('hex');
 const now = () => new Date().toISOString();
 const num = (v) => { const n = Number(v); return isNaN(n) ? 0 : n; };
 
+// Trade of a cost: 'Electrical' | 'Mechanical' | null (unassigned).
+function normTrade(v) {
+  const s = String(v ?? '').trim().toLowerCase();
+  if (!s) return null;
+  if (s.startsWith('e')) return 'Electrical';
+  if (s.startsWith('m')) return 'Mechanical';
+  return null;
+}
+// Materials categories carry their trade in the name; other lines use their own trade field.
+function itemTrade(it) {
+  if (it.category === 'Materials – Electrical') return 'Electrical';
+  if (it.category === 'Materials – Mechanical') return 'Mechanical';
+  return normTrade(it.trade);
+}
+
 // Normalize a pasted date to YYYY-MM-DD so the HTML date input can render it.
 // Accepts YYYY-MM-DD, M/D/YYYY, M/D/YY, with stray whitespace / carriage returns.
 function normDate(v) {
@@ -98,8 +113,12 @@ function buildSummary(projectId) {
     projTotal += rentalCost;
     spend.rental += rentalCost;
 
-    // Single overall project budget (set directly). Categories are display-only.
     const catSpend = (label, sp) => ({ label, spend: sp });
+
+    // ---- Per-trade spend: payroll + staffing + materials + trade-tagged lines/rentals ----
+    const tradeSpend = { Electrical: elecPay + staffElecPay, Mechanical: mechPay + staffMechPay, Unassigned: 0 };
+    for (const w of weekOut) for (const it of w.items) tradeSpend[itemTrade(it) || 'Unassigned'] += num(it.amount);
+    for (const r of rentalRows) tradeSpend[normTrade(r.trade) || 'Unassigned'] += num(r.cost);
 
     // Change orders (computed up front so their $ can be folded into the budget).
     const coRows = db.prepare('SELECT * FROM expense_change_orders WHERE project_id = ? ORDER BY sort_order, co_date').all(p.id);
@@ -109,9 +128,36 @@ function buildSummary(projectId) {
       equipment_total: coRows.reduce((s, c) => s + num(c.equipment_total), 0),
       total: coRows.reduce((s, c) => s + num(c.total), 0),
     };
-    // Effective budget = base budget + all change order totals.
-    const baseBudget = num(p.budget_total);
+    // Budgets are set per trade. Change orders raise the budget of their trade
+    // (unassigned COs raise only the overall budget). Projects created before the
+    // split keep their single overall budget until both trade budgets are entered.
+    const coByTrade = { Electrical: 0, Mechanical: 0, Unassigned: 0 };
+    for (const c of coRows) coByTrade[normTrade(c.trade) || 'Unassigned'] += num(c.total);
+    const baseElec = num(p.budget_elec), baseMech = num(p.budget_mech);
+    const splitNeeded = baseElec === 0 && baseMech === 0 && num(p.budget_total) > 0;
+    const baseBudget = splitNeeded ? num(p.budget_total) : baseElec + baseMech;
     const budgetTotal = baseBudget + coTotals.total;
+    const elecHoursOwn = weeks.reduce((s, w) => s + num(w.elec_hours), 0);
+    const elecHoursStaff = weeks.reduce((s, w) => s + num(w.staff_elec_hours), 0);
+    const mechHoursOwn = weeks.reduce((s, w) => s + num(w.mech_hours), 0);
+    const mechHoursStaff = weeks.reduce((s, w) => s + num(w.staff_mech_hours), 0);
+    const tradeBlock = (name, base, ownHours, staffHours, payroll) => {
+      const budget = base + coByTrade[name];
+      const spend = tradeSpend[name];
+      return {
+        base_budget: base, change_orders: coByTrade[name], budget, spend,
+        remaining: budget - spend,
+        pct: budget > 0 ? Math.round((spend / budget) * 100) : 0,
+        payroll,
+        hours: ownHours + staffHours, own_hours: ownHours, staff_hours: staffHours,
+      };
+    };
+    const trades = {
+      elec: tradeBlock('Electrical', baseElec, elecHoursOwn, elecHoursStaff, elecPay + staffElecPay),
+      mech: tradeBlock('Mechanical', baseMech, mechHoursOwn, mechHoursStaff, mechPay + staffMechPay),
+      unassigned: { spend: tradeSpend.Unassigned, change_orders: coByTrade.Unassigned },
+      budget_split_needed: splitNeeded,
+    };
 
     out.push({
       ...p,
@@ -142,6 +188,7 @@ function buildSummary(projectId) {
         budget_remaining: budgetTotal > 0 ? budgetTotal - projTotal : 0,
         budget_pct: budgetTotal > 0 ? Math.round((projTotal / budgetTotal) * 100) : 0,
       },
+      trades,
       budgets: {
         elec: catSpend('Electrical Payroll', spend.elec),
         mech: catSpend('Mechanical Payroll', spend.mech),
@@ -178,7 +225,9 @@ router.post('/categories', appEditRequired('expenses'), (req, res) => {
 });
 
 // ===== Projects =====
-const PROJECT_BUDGET_COLS = ['budget_total'];
+const PROJECT_BUDGET_COLS = ['budget_elec', 'budget_mech', 'budget_total'];
+// Overall budget is always Electrical + Mechanical once either is set.
+const syncTotal = (row) => { if (num(row.budget_elec) || num(row.budget_mech)) row.budget_total = num(row.budget_elec) + num(row.budget_mech); return row; };
 
 router.get('/projects', (_req, res) => {
   res.json(db.prepare('SELECT * FROM expense_projects WHERE archived = 0 ORDER BY sort_order, name').all());
@@ -194,6 +243,7 @@ router.post('/projects', appEditRequired('expenses'), (req, res) => {
     created_by: req.user?.email || null, created_date: now(), updated_date: now(),
   };
   for (const c of PROJECT_BUDGET_COLS) row[c] = num(req.body?.[c]);
+  syncTotal(row);
   const cols = ['id', 'name', ...PROJECT_BUDGET_COLS, 'archived', 'sort_order', 'created_by', 'created_date', 'updated_date'];
   db.prepare(`INSERT INTO expense_projects (${cols.join(',')}) VALUES (${cols.map((c) => '@' + c).join(',')})`).run(row);
   res.json(row);
@@ -205,7 +255,8 @@ router.put('/projects/:id', appEditRequired('expenses'), (req, res) => {
   const b = req.body || {};
   const name = b.name != null ? String(b.name).trim() : p.name;
   const archived = b.archived != null ? (b.archived ? 1 : 0) : p.archived;
-  const vals = PROJECT_BUDGET_COLS.map((c) => (b[c] != null ? num(b[c]) : p[c]));
+  const next = syncTotal(Object.fromEntries(PROJECT_BUDGET_COLS.map((c) => [c, b[c] != null ? num(b[c]) : p[c]])));
+  const vals = PROJECT_BUDGET_COLS.map((c) => next[c]);
   db.prepare(`UPDATE expense_projects SET name=?, ${PROJECT_BUDGET_COLS.map((c) => c + '=?').join(', ')}, archived=?, updated_date=? WHERE id=?`)
     .run(name, ...vals, archived, now(), p.id);
   res.json(db.prepare('SELECT * FROM expense_projects WHERE id = ?').get(p.id));
@@ -317,11 +368,12 @@ router.post('/items', appEditRequired('expenses'), (req, res) => {
     id: id(), week_id, category,
     description: (req.body?.description || '').trim() || null,
     amount: num(req.body?.amount),
+    trade: normTrade(req.body?.trade),
     sort_order: (maxRow && maxRow.m != null ? maxRow.m : -1) + 1,
     created_date: now(), updated_date: now(),
   };
-  db.prepare(`INSERT INTO expense_items (id,week_id,category,description,amount,sort_order,created_date,updated_date)
-    VALUES (@id,@week_id,@category,@description,@amount,@sort_order,@created_date,@updated_date)`).run(row);
+  db.prepare(`INSERT INTO expense_items (id,week_id,category,description,amount,trade,sort_order,created_date,updated_date)
+    VALUES (@id,@week_id,@category,@description,@amount,@trade,@sort_order,@created_date,@updated_date)`).run(row);
   res.json(row);
 });
 
@@ -332,8 +384,9 @@ router.put('/items/:id', appEditRequired('expenses'), (req, res) => {
   const category = b.category != null ? String(b.category).trim() : it.category;
   const description = b.description != null ? (String(b.description).trim() || null) : it.description;
   const amount = b.amount != null ? num(b.amount) : it.amount;
-  db.prepare('UPDATE expense_items SET category=?, description=?, amount=?, updated_date=? WHERE id=?')
-    .run(category, description, amount, now(), it.id);
+  const trade = b.trade !== undefined ? normTrade(b.trade) : it.trade;
+  db.prepare('UPDATE expense_items SET category=?, description=?, amount=?, trade=?, updated_date=? WHERE id=?')
+    .run(category, description, amount, trade, now(), it.id);
   res.json(db.prepare('SELECT * FROM expense_items WHERE id = ?').get(it.id));
 });
 
@@ -345,7 +398,7 @@ router.delete('/items/:id', appEditRequired('expenses'), (req, res) => {
 });
 
 // ===== Change Orders (tracked separately, per project) =====
-const CO_COLS = ['co_number', 'co_date', 'man_hours', 'equipment_total', 'total', 'notes'];
+const CO_COLS = ['co_number', 'co_date', 'trade', 'man_hours', 'equipment_total', 'total', 'notes'];
 
 router.post('/change-orders', appEditRequired('expenses'), (req, res) => {
   const project_id = req.body?.project_id;
@@ -356,6 +409,7 @@ router.post('/change-orders', appEditRequired('expenses'), (req, res) => {
     id: id(), project_id,
     co_number: (req.body?.co_number || '').trim() || null,
     co_date: req.body?.co_date || null,
+    trade: normTrade(req.body?.trade),
     man_hours: num(req.body?.man_hours),
     equipment_total: num(req.body?.equipment_total),
     total: num(req.body?.total),
@@ -379,8 +433,9 @@ router.put('/change-orders/:id', appEditRequired('expenses'), (req, res) => {
   const equipment_total = b.equipment_total != null ? num(b.equipment_total) : co.equipment_total;
   const total = b.total != null ? num(b.total) : co.total;
   const notes = b.notes != null ? (String(b.notes).trim() || null) : co.notes;
-  db.prepare('UPDATE expense_change_orders SET co_number=?, co_date=?, man_hours=?, equipment_total=?, total=?, notes=?, updated_by=?, updated_date=? WHERE id=?')
-    .run(co_number, co_date, man_hours, equipment_total, total, notes, req.user?.email || null, now(), co.id);
+  const trade = b.trade !== undefined ? normTrade(b.trade) : co.trade;
+  db.prepare('UPDATE expense_change_orders SET co_number=?, co_date=?, trade=?, man_hours=?, equipment_total=?, total=?, notes=?, updated_by=?, updated_date=? WHERE id=?')
+    .run(co_number, co_date, trade, man_hours, equipment_total, total, notes, req.user?.email || null, now(), co.id);
   res.json(db.prepare('SELECT * FROM expense_change_orders WHERE id = ?').get(co.id));
 });
 
@@ -458,7 +513,7 @@ router.post('/rentals', appEditRequired('expenses'), (req, res) => {
     id: id(), project_id,
     equipment_type: (b.equipment_type || '').trim() || null,
     serial_number: (b.serial_number || '').trim() || null,
-    trade: (b.trade || '').trim() || null,
+    trade: normTrade(b.trade),
     date_delivered: normDate(b.date_delivered) || null,
     date_returned: normDate(b.date_returned) || null,
     cost: num(b.cost),
@@ -479,7 +534,7 @@ router.put('/rentals/:id', appEditRequired('expenses'), (req, res) => {
   const v = {
     equipment_type: b.equipment_type != null ? (String(b.equipment_type).trim() || null) : r0.equipment_type,
     serial_number: b.serial_number != null ? (String(b.serial_number).trim() || null) : r0.serial_number,
-    trade: b.trade != null ? (String(b.trade).trim() || null) : r0.trade,
+    trade: b.trade !== undefined ? normTrade(b.trade) : r0.trade,
     date_delivered: b.date_delivered !== undefined ? (normDate(b.date_delivered) || null) : r0.date_delivered,
     date_returned: b.date_returned !== undefined ? (normDate(b.date_returned) || null) : r0.date_returned,
     cost: b.cost != null ? num(b.cost) : r0.cost,

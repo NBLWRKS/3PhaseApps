@@ -311,6 +311,10 @@ ensureColumn('expense_weeks', 'staff_elec_pay', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('expense_weeks', 'staff_elec_hours', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('expense_weeks', 'staff_mech_pay', 'REAL NOT NULL DEFAULT 0');
 ensureColumn('expense_weeks', 'staff_mech_hours', 'REAL NOT NULL DEFAULT 0');
+// Trade ('Electrical' | 'Mechanical') on costs that aren't tied to a trade by
+// their category, so each dollar lands in the Electrical or Mechanical budget.
+ensureColumn('expense_items', 'trade', 'TEXT');
+ensureColumn('expense_change_orders', 'trade', 'TEXT');
 // Onboarding: built-in (slide + quiz) courses shipped with the app, and quiz scores.
 ensureColumn('onboarding_courses', 'slug', 'TEXT');
 ensureColumn('onboarding_courses', 'builtin', 'INTEGER NOT NULL DEFAULT 0');

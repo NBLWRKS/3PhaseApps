@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Cell, PieChart, Pie, Legend, LineChart, Line, Area, AreaChart,
+  Cell, PieChart, Pie, Legend, Area, AreaChart,
 } from 'recharts';
-import { DollarSign, TrendingUp, Clock, Wallet } from 'lucide-react';
+import { DollarSign, Clock, Wallet, Zap, Wrench } from 'lucide-react';
 
 const money = (n) => '$' + (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 const CAT_COLORS = ['hsl(208 75% 42%)', 'hsl(160 84% 34%)', 'hsl(38 92% 50%)', 'hsl(280 45% 55%)', 'hsl(0 72% 55%)', 'hsl(190 70% 42%)', 'hsl(30 50% 45%)', 'hsl(230 55% 55%)'];
@@ -20,7 +20,8 @@ export default function ExpenseDashboard({ summary }) {
 
   const grandTotal = summary.reduce((s, p) => s + (p.totals?.total || 0), 0);
   const grandBudget = summary.reduce((s, p) => s + (p.totals?.budget || 0), 0);
-  const totalHours = summary.reduce((s, p) => s + (p.totals?.hours || 0), 0);
+  const sumTrade = (list, trade, key) => list.reduce((s, p) => s + (p.trades?.[trade]?.[key] || 0), 0);
+  const fmtHrs = (n) => (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
   const totalPayroll = summary.reduce((s, p) => s + (p.totals?.payroll || 0), 0);
   const overallPct = grandBudget > 0 ? Math.round(grandTotal / grandBudget * 100) : 0;
 
@@ -40,25 +41,26 @@ export default function ExpenseDashboard({ summary }) {
     return Object.entries(byWeek).sort(([a], [b]) => a.localeCompare(b)).map(([week, total]) => ({ week, total }));
   }, [scoped]);
 
-  // Per-category budget vs spend across scope.
-  const catBudgets = useMemo(() => {
-    const keys = ['elec', 'mech', 'staff_elec', 'staff_mech', 'materials_elec', 'materials_mech', 'rental'];
-    const labels = { elec: 'Electrical Payroll', mech: 'Mechanical Payroll', staff_elec: 'Staffing – Electrical', staff_mech: 'Staffing – Mechanical', materials_elec: 'Materials – Electrical', materials_mech: 'Materials – Mechanical', rental: 'Equipment Rental' };
-    return keys.map((k) => {
-      let spend = 0, budget = 0;
-      for (const p of scoped) { const b = p.budgets?.[k]; if (b) { spend += b.spend || 0; budget += b.budget || 0; } }
-      return { key: k, label: labels[k], spend, budget, pct: budget > 0 ? Math.round(spend / budget * 100) : 0 };
-    });
-  }, [scoped]);
+  // Electrical vs Mechanical budget, spend and man hours across the focused scope.
+  const tradeRows = useMemo(() => [
+    { key: 'elec', label: 'Electrical', icon: Zap },
+    { key: 'mech', label: 'Mechanical', icon: Wrench },
+  ].map((r) => {
+    const budget = sumTrade(scoped, r.key, 'budget');
+    const spend = sumTrade(scoped, r.key, 'spend');
+    return { ...r, budget, spend, pct: budget > 0 ? Math.round(spend / budget * 100) : 0,
+      hours: sumTrade(scoped, r.key, 'hours'), own: sumTrade(scoped, r.key, 'own_hours'), staff: sumTrade(scoped, r.key, 'staff_hours') };
+  }), [scoped]);
+  const unassigned = scoped.reduce((s, p) => s + (p.trades?.unassigned?.spend || 0), 0);
 
   return (
     <div className="space-y-6">
       {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Kpi icon={DollarSign} label="Total spend" value={money(grandTotal)} sub={grandBudget > 0 ? `${overallPct}% of ${money(grandBudget)}` : null} accent={grandBudget > 0 ? budgetColor(overallPct) : undefined} />
-        <Kpi icon={Wallet} label="Total budget" value={money(grandBudget)} />
-        <Kpi icon={TrendingUp} label="Total payroll" value={money(totalPayroll)} />
-        <Kpi icon={Clock} label="Total hours" value={totalHours.toLocaleString()} />
+        <Kpi icon={Wallet} label="Total budget" value={money(grandBudget)} sub={`payroll ${money(totalPayroll)}`} />
+        <Kpi icon={Clock} label="Electrical man hours" value={fmtHrs(sumTrade(summary, 'elec', 'hours'))} sub={`${fmtHrs(sumTrade(summary, 'elec', 'own_hours'))} own + ${fmtHrs(sumTrade(summary, 'elec', 'staff_hours'))} staffing`} />
+        <Kpi icon={Clock} label="Mechanical man hours" value={fmtHrs(sumTrade(summary, 'mech', 'hours'))} sub={`${fmtHrs(sumTrade(summary, 'mech', 'own_hours'))} own + ${fmtHrs(sumTrade(summary, 'mech', 'staff_hours'))} staffing`} />
       </div>
 
       {/* Scope filter */}
@@ -68,13 +70,13 @@ export default function ExpenseDashboard({ summary }) {
         {summary.map((p) => <FilterPill key={p.id} active={selected === p.id} onClick={() => setSelected(p.id)}>{p.name}</FilterPill>)}
       </div>
 
-      {/* Category budget bars */}
-      <Card title="Budget vs. actual by category">
+      {/* Trade budget bars */}
+      <Card title="Budget vs. actual by trade">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-          {catBudgets.map((c) => (
+          {tradeRows.map((c) => (
             <div key={c.key}>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-sm font-medium">{c.label}</span>
+                <span className="text-sm font-medium flex items-center gap-1.5"><c.icon className="w-4 h-4 text-muted-foreground" /> {c.label}</span>
                 <span className="text-xs text-muted-foreground tabular-nums">
                   {money(c.spend)}{c.budget > 0 && <> / {money(c.budget)} · <span style={{ color: budgetColor(c.pct) }} className="font-semibold">{c.pct}%</span></>}
                 </span>
@@ -82,9 +84,11 @@ export default function ExpenseDashboard({ summary }) {
               <div className="h-2.5 rounded-full bg-muted overflow-hidden">
                 <div className="h-full rounded-full transition-all" style={{ width: `${c.budget > 0 ? Math.min(100, c.pct) : 0}%`, backgroundColor: c.budget > 0 ? budgetColor(c.pct) : 'hsl(var(--muted-foreground))' }} />
               </div>
+              <div className="text-xs text-muted-foreground mt-1.5 tabular-nums">{fmtHrs(c.hours)} man hours · {fmtHrs(c.own)} own + {fmtHrs(c.staff)} staffing</div>
             </div>
           ))}
         </div>
+        {unassigned > 0 && <p className="text-xs text-muted-foreground mt-4">{money(unassigned)} of rentals / expense lines has no trade and counts toward the total only.</p>}
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
