@@ -238,7 +238,7 @@ function BudgetModal({ project, onClose, onSaved }) {
     if (isNew && !name.trim()) { toast.error('Enter a project name'); return; }
     setSaving(true);
     try {
-      const payload = { budget_elec: num(elec), budget_mech: num(mech) };
+      const payload = { budget_elec: parseNum(elec) || 0, budget_mech: parseNum(mech) || 0 };
       if (isNew) await base44.expenses.addProject({ name: name.trim(), ...payload });
       else await base44.expenses.updateProject(project.id, payload);
       onSaved();
@@ -268,8 +268,8 @@ function BudgetModal({ project, onClose, onSaved }) {
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1"><Icon className="w-3.5 h-3.5" style={{ color: tint }} /> {label}</label>
               <div className="inline-flex items-center rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-primary/30 w-full mt-1">
                 <span className="pl-3 text-muted-foreground">$</span>
-                <input type="number" step="any" inputMode="decimal" value={val} placeholder="0" autoFocus={!isNew && i === 0}
-                  onChange={(e) => set(e.target.value)}
+                <FmtField value={val} placeholder="0" autoFocus={!isNew && i === 0}
+                  onChange={set}
                   className="w-full bg-transparent outline-none px-2 py-2 text-sm tabular-nums" />
               </div>
             </div>
@@ -277,7 +277,7 @@ function BudgetModal({ project, onClose, onSaved }) {
         </div>
         <div className="flex items-center justify-between text-sm mt-3 px-1">
           <span className="text-muted-foreground">Overall budget</span>
-          <span className="font-semibold tabular-nums">{money(num(elec) + num(mech))}</span>
+          <span className="font-semibold tabular-nums">{money((parseNum(elec) || 0) + (parseNum(mech) || 0))}</span>
         </div>
         <div className="flex justify-end gap-2 mt-5">
           <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary">Cancel</button>
@@ -729,7 +729,7 @@ function RentalModal({ project, rentalTypes, onAddType, onClose, onSaved }) {
   const save = async () => {
     setSaving(true);
     try {
-      await base44.expenses.addRental({ project_id: project.id, ...f, cost: num(f.cost) });
+      await base44.expenses.addRental({ project_id: project.id, ...f, cost: parseNum(f.cost) || 0 });
       onSaved();
     } catch { toast.error('Failed to save rental'); setSaving(false); }
   };
@@ -762,7 +762,7 @@ function RentalModal({ project, rentalTypes, onAddType, onClose, onSaved }) {
           {field('Cost', (
             <div className="inline-flex items-center rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-primary/30 w-full">
               <span className="pl-3 text-muted-foreground">$</span>
-              <input type="number" step="any" value={f.cost} placeholder="0" onChange={(e) => setF((s) => ({ ...s, cost: e.target.value }))} className="w-full bg-transparent outline-none px-2 py-2 text-sm tabular-nums" />
+              <FmtField value={f.cost} placeholder="0" onChange={(val) => setF((s) => ({ ...s, cost: val }))} className="w-full bg-transparent outline-none px-2 py-2 text-sm tabular-nums" />
             </div>
           ))}
           {field('Date delivered', <input type="date" value={f.date_delivered} onChange={(e) => setF((s) => ({ ...s, date_delivered: e.target.value }))} className={inputCls} />)}
@@ -863,17 +863,56 @@ function PurchaseOrders({ project: p, editable, onAddPO, onSavePO, onDelPO }) {
   );
 }
 
+// Thousands separators for display ("10,150,826.39"); plain digits while typing.
+const fmtNum = (v) => {
+  if (v === '' || v == null) return '';
+  const n = Number(v);
+  if (!Number.isFinite(n)) return String(v);
+  return Number.isInteger(n)
+    ? n.toLocaleString('en-US')
+    : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+// Accepts pasted values like "$10,150,826.39".
+const parseNum = (str) => {
+  const t = String(str ?? '').replace(/[$,\s]/g, '');
+  if (t === '') return 0;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : NaN;
+};
+
+// Number field that shows commas when not being edited and saves on blur.
 function NumInput({ value, onCommit, prefix, className = '' }) {
-  const [v, setV] = useState(value ?? 0);
-  useEffect(() => { setV(value ?? 0); }, [value]);
+  const [focused, setFocused] = useState(false);
+  const [v, setV] = useState(String(value ?? 0));
+  useEffect(() => { if (!focused) setV(String(value ?? 0)); }, [value, focused]);
   return (
     <div className={`inline-flex items-center rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-primary/30 transition ${className}`}>
       {prefix && <span className="pl-2 text-muted-foreground text-xs">{prefix}</span>}
-      <input type="number" step="any" value={v}
+      <input type="text" inputMode="decimal" value={focused ? v : fmtNum(value ?? 0)}
+        onFocus={(e) => { setFocused(true); setV(String(value ?? 0)); requestAnimationFrame(() => e.target.select()); }}
         onChange={(e) => setV(e.target.value)}
-        onBlur={(e) => Number(e.target.value) !== Number(value) && onCommit(Number(e.target.value))}
+        onBlur={() => {
+          setFocused(false);
+          const n = parseNum(v);
+          if (Number.isNaN(n)) { toast.error('Enter a number'); return; }
+          if (n !== Number(value)) onCommit(n);
+        }}
+        onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
         className="w-full bg-transparent outline-none px-2 py-1.5 text-sm tabular-nums" />
     </div>
+  );
+}
+
+// Controlled variant for forms (budget / rental modals): commas when not focused.
+function FmtField({ value, onChange, className = '', ...rest }) {
+  const [focused, setFocused] = useState(false);
+  return (
+    <input type="text" inputMode="decimal" {...rest}
+      value={focused ? (value ?? '') : fmtNum(value === '' ? '' : parseNum(value))}
+      onFocus={() => setFocused(true)}
+      onBlur={() => { setFocused(false); const n = parseNum(value); if (!Number.isNaN(n) && value !== '') onChange(String(n)); }}
+      onChange={(e) => onChange(e.target.value)}
+      className={className} />
   );
 }
 
