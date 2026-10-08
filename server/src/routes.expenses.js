@@ -302,6 +302,75 @@ function insertWeek(project_id, body, user) {
   return row;
 }
 
+// ---- Week matching / merging -------------------------------------------------
+// Different sources date the same week differently (payroll ends Friday, the time
+// tracker ends Saturday), so weeks within a few days of each other are the same week.
+const SAME_WEEK_DAYS = 3;
+const dayNum = (ymd) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd || ''); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) / 86400000 : null; };
+const payTotal = (w) => num(w.elec_pay) + num(w.mech_pay) + num(w.staff_elec_pay) + num(w.staff_mech_pay);
+
+// Closest existing week in the project within SAME_WEEK_DAYS of a date (or null).
+function findSameWeek(project_id, week_ending) {
+  const d = dayNum(week_ending);
+  if (d == null) return null;
+  let best = null, bestGap = Infinity;
+  for (const w of db.prepare('SELECT * FROM expense_weeks WHERE project_id = ?').all(project_id)) {
+    const g = Math.abs((dayNum(w.week_ending) ?? Infinity) - d);
+    if (g <= SAME_WEEK_DAYS && g < bestGap) { best = w; bestGap = g; }
+  }
+  return best;
+}
+
+// Fold `src` into `dst`: pay/hours are added, notes joined, expense lines moved. `src` is deleted.
+function mergeWeekInto(dst, src, user) {
+  const vals = WEEK_PAY_COLS.map((c) => num(dst[c]) + num(src[c]));
+  const notes = [dst.notes, src.notes].filter(Boolean).join('\n') || null;
+  db.prepare(`UPDATE expense_weeks SET ${WEEK_PAY_COLS.map((c) => c + '=?').join(', ')}, notes=?, updated_by=?, updated_date=? WHERE id=?`)
+    .run(...vals, notes, user || null, now(), dst.id);
+  const maxRow = db.prepare('SELECT MAX(sort_order) AS m FROM expense_items WHERE week_id = ?').get(dst.id);
+  let so = (maxRow && maxRow.m != null ? maxRow.m : -1) + 1;
+  for (const it of db.prepare('SELECT id FROM expense_items WHERE week_id = ? ORDER BY sort_order').all(src.id)) {
+    db.prepare('UPDATE expense_items SET week_id = ?, sort_order = ? WHERE id = ?').run(dst.id, so++, it.id);
+  }
+  db.prepare('DELETE FROM expense_weeks WHERE id = ?').run(src.id);
+}
+
+// Plan merges for a project: group weeks whose dates are within SAME_WEEK_DAYS of the
+// group's first week. The week with payroll $ is kept (its date wins); otherwise the earliest.
+function planMerges(project_id) {
+  const weeks = db.prepare('SELECT * FROM expense_weeks WHERE project_id = ? ORDER BY week_ending ASC').all(project_id);
+  const groups = [];
+  for (const w of weeks) {
+    const g = groups[groups.length - 1];
+    const d = dayNum(w.week_ending);
+    if (g && d != null && g.start != null && d - g.start <= SAME_WEEK_DAYS) g.weeks.push(w);
+    else groups.push({ start: d, weeks: [w] });
+  }
+  return groups.filter((g) => g.weeks.length > 1).map((g) => {
+    const keep = g.weeks.find((w) => payTotal(w) > 0) || g.weeks[0];
+    return { keep, merge: g.weeks.filter((w) => w.id !== keep.id) };
+  });
+}
+
+// Preview (dry_run) or apply the merge of split weeks in a project.
+router.post('/projects/:id/merge-weeks', appEditRequired('expenses'), (req, res) => {
+  const p = db.prepare('SELECT id FROM expense_projects WHERE id = ?').get(req.params.id);
+  if (!p) return res.status(404).json({ error: 'Not found' });
+  const plan = planMerges(p.id);
+  const summary = plan.map(({ keep, merge }) => ({ keep: keep.week_ending, merge: merge.map((w) => w.week_ending) }));
+  if (req.body?.dry_run) return res.json({ groups: summary });
+  db.transaction(() => {
+    for (const { keep, merge } of plan) {
+      let dst = keep;
+      for (const src of merge) {
+        mergeWeekInto(dst, src, req.user?.email);
+        dst = db.prepare('SELECT * FROM expense_weeks WHERE id = ?').get(keep.id);
+      }
+    }
+  })();
+  res.json({ ok: true, groups: summary, weeks_removed: summary.reduce((s, g) => s + g.merge.length, 0) });
+});
+
 router.post('/weeks', appEditRequired('expenses'), (req, res) => {
   const project_id = req.body?.project_id;
   const week_ending = (req.body?.week_ending || '').trim();
@@ -344,20 +413,31 @@ router.post('/import', appEditRequired('expenses'), (req, res) => {
 
   const insertItem = db.prepare(`INSERT INTO expense_items (id,week_id,category,description,amount,sort_order,created_date,updated_date)
     VALUES (@id,@week_id,@category,@description,@amount,@sort_order,@created_date,@updated_date)`);
-  let created = 0;
+  let created = 0, updated = 0;
   const tx = db.transaction(() => {
     for (const r of rows) {
       const we = normDate(r.week_ending);
       if (!we) continue;
-      const week = insertWeek(project_id, r, req.user?.email);
-      created++;
+      // A row within a few days of an existing week fills that week (non-zero
+      // values overwrite) instead of creating a second copy of the same week.
+      let week = findSameWeek(project_id, we);
+      if (week) {
+        const vals = WEEK_PAY_COLS.map((c) => (num(r[c]) !== 0 ? num(r[c]) : num(week[c])));
+        db.prepare(`UPDATE expense_weeks SET ${WEEK_PAY_COLS.map((c) => c + '=?').join(', ')}, updated_by=?, updated_date=? WHERE id=?`)
+          .run(...vals, req.user?.email || null, now(), week.id);
+        updated++;
+      } else {
+        week = insertWeek(project_id, r, req.user?.email);
+        created++;
+      }
       const lineDefs = [
         ['Materials – Electrical', r.materials_elec],
         ['Materials – Mechanical', r.materials_mech],
         ['Equipment Rental', r.rental],
         ['Other', r.other],
       ];
-      let so = 0;
+      const mx = db.prepare('SELECT MAX(sort_order) AS m FROM expense_items WHERE week_id = ?').get(week.id);
+      let so = (mx && mx.m != null ? mx.m : -1) + 1;
       for (const [cat, amt] of lineDefs) {
         const a = num(amt);
         if (a) insertItem.run({ id: id(), week_id: week.id, category: cat, description: null, amount: a, sort_order: so++, created_date: now(), updated_date: now() });
@@ -365,7 +445,7 @@ router.post('/import', appEditRequired('expenses'), (req, res) => {
     }
   });
   tx();
-  res.json({ ok: true, weeks_created: created });
+  res.json({ ok: true, weeks_created: created, weeks_updated: updated });
 });
 
 // ===== Expense line items =====

@@ -6,7 +6,7 @@ import { canRead, canEdit } from '@/lib/permissions';
 import {
   Plus, Trash2, ChevronDown, Loader2, LayoutDashboard, Table2,
   Download, Upload, DollarSign, FolderPlus, CalendarPlus, Zap, Wrench,
-  Package, Truck, Users, Pencil, FileText, Wallet, Clock, X,
+  Package, Truck, Users, Pencil, FileText, Wallet, Clock, X, Combine,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo.jpg';
@@ -46,6 +46,7 @@ export default function Expenses() {
   const [importFor, setImportFor] = useState(null);
   const [rentalTypes, setRentalTypes] = useState(['Scissor Lift', 'Gas Monitor', 'Fork Lift', 'Donkey']);
   const [rentalModalFor, setRentalModalFor] = useState(null);
+  const [mergeFor, setMergeFor] = useState(null);
 
   const editable = canEdit(user, 'expenses');
 
@@ -207,10 +208,12 @@ export default function Expenses() {
             onImport={() => setImportFor(selected)} onAddCategory={addCategory}
             onAddCO={addCO} onSaveCO={saveCO} onDelCO={delCO}
             onAddPO={addPO} onSavePO={savePO} onDelPO={delPO}
-            onAddRental={() => setRentalModalFor(selected)} onSaveRental={saveRental} onDelRental={delRental} />
+            onAddRental={() => setRentalModalFor(selected)} onSaveRental={saveRental} onDelRental={delRental}
+            onMergeWeeks={() => setMergeFor(selected)} />
         ) : null}
       </main>
 
+      {mergeFor && <MergeWeeksModal project={mergeFor} onClose={() => setMergeFor(null)} onDone={() => { setMergeFor(null); load({ silent: true }); }} />}
       {budgetModal && (
         <BudgetModal project={budgetModal === 'new' ? null : budgetModal}
           onClose={() => setBudgetModal(null)} onSaved={() => { setBudgetModal(null); load(); }} />
@@ -290,6 +293,53 @@ function BudgetModal({ project, onClose, onSaved }) {
   );
 }
 
+// ---- Merge split weeks: the same week logged under two dates (e.g. Fri payroll + Sat hours) ----
+function MergeWeeksModal({ project, onClose, onDone }) {
+  const [groups, setGroups] = useState(null);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    base44.expenses.mergeWeeks(project.id, true).then((r) => setGroups(r?.groups || [])).catch(() => { toast.error('Could not check weeks'); setGroups([]); });
+  }, [project.id]);
+  const doMerge = async () => {
+    setSaving(true);
+    try {
+      const r = await base44.expenses.mergeWeeks(project.id, false);
+      toast.success(`Merged ${r?.weeks_removed || 0} week(s)`);
+      onDone();
+    } catch { toast.error('Merge failed'); setSaving(false); }
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
+      <div role="dialog" aria-modal="true" className="w-full max-w-md rounded-2xl bg-card border border-border shadow-xl p-5 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-bold mb-1 flex items-center gap-2"><Combine className="w-5 h-5" /> Merge split weeks — {project.name}</h2>
+        <p className="text-xs text-muted-foreground mb-4">Weeks dated within 3 days of each other are combined into one: pay and hours are added together and expense lines move over. The week with payroll keeps its date.</p>
+        {groups == null ? (
+          <div className="flex justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+        ) : groups.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-6 text-center">No split weeks found.</p>
+        ) : (
+          <div className="rounded-lg border border-border divide-y divide-border text-sm max-h-72 overflow-y-auto">
+            {groups.map((g) => (
+              <div key={g.keep} className="flex items-center justify-between px-3 py-1.5 tabular-nums">
+                <span className="text-muted-foreground">{g.merge.join(', ')}</span>
+                <span>→ <span className="font-semibold">{g.keep}</span></span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-muted-foreground hover:bg-secondary">Cancel</button>
+          {groups && groups.length > 0 && (
+            <button onClick={doMerge} disabled={saving} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold shadow-sm hover:brightness-110 disabled:opacity-50 flex items-center gap-1.5">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />} Merge {groups.reduce((s, g) => s + g.merge.length, 0)} week(s)
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---- Import modal: paste tab/comma separated weekly totals ----
 const IMPORT_COLS = [
   ['week_ending', 'Week ending'], ['elec_pay', 'Elec pay'], ['elec_hours', 'Elec hrs'],
@@ -324,7 +374,8 @@ function ImportModal({ project, onClose, onDone }) {
     setSaving(true);
     try {
       const r = await base44.expenses.importWeeks(project.id, parsed);
-      toast.success(`Imported ${r?.weeks_created ?? parsed.length} week(s)`);
+      const upd = r?.weeks_updated || 0;
+      toast.success(`Imported ${r?.weeks_created ?? parsed.length} new week(s)${upd ? `, filled ${upd} existing week(s)` : ''}`);
       onDone();
     } catch { toast.error('Import failed'); setSaving(false); }
   };
@@ -334,7 +385,7 @@ function ImportModal({ project, onClose, onDone }) {
       <div className="w-full max-w-2xl rounded-2xl bg-card border border-border shadow-xl p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold mb-1 flex items-center gap-2"><Upload className="w-5 h-5" /> Import weekly totals — {project.name}</h2>
         <p className="text-xs text-muted-foreground mb-3">
-          Paste one week per line, columns separated by tabs (copy straight from Excel) or commas, in this order:
+          Paste one week per line, columns separated by tabs (copy straight from Excel) or commas, in this order. A row dated within 3 days of a week that already exists (e.g. Friday vs Saturday week-ending) fills that week instead of adding a new one:
         </p>
         <div className="text-[11px] bg-secondary/50 rounded-lg px-3 py-2 mb-3 overflow-x-auto whitespace-nowrap font-mono text-muted-foreground">
           {IMPORT_COLS.map(([, label]) => label).join('  ·  ')}
@@ -437,7 +488,7 @@ function CatBudget({ data, meta, onClick }) {
   );
 }
 
-function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onImport, onAddCategory, onAddCO, onSaveCO, onDelCO, onAddPO, onSavePO, onDelPO, onAddRental, onSaveRental, onDelRental }) {
+function ProjectCard({ project: p, editable, categories, onMergeWeeks, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onImport, onAddCategory, onAddCO, onSaveCO, onDelCO, onAddPO, onSavePO, onDelPO, onAddRental, onSaveRental, onDelRental }) {
   const t = p.totals || {};
   const tr = p.trades || {};
   const bud = p.budgets || {};
@@ -454,6 +505,7 @@ function ProjectCard({ project: p, editable, categories, onAddWeek, onSaveWeek, 
           <div className="flex items-center gap-1.5">
             <button onClick={() => onAddWeek(p.id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition"><CalendarPlus className="w-4 h-4" /> Week</button>
             <button onClick={onImport} title="Import weekly totals" className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-primary hover:bg-secondary transition"><Upload className="w-4 h-4" /></button>
+            <button onClick={onMergeWeeks} title="Merge split weeks" aria-label="Merge split weeks" className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-primary hover:bg-secondary transition"><Combine className="w-4 h-4" /></button>
             <button onClick={onEditBudget} title="Edit budgets" className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-primary hover:bg-secondary transition"><Pencil className="w-4 h-4" /></button>
             <button onClick={() => onDelProject(p)} title="Delete project" className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-destructive hover:bg-secondary transition"><Trash2 className="w-4 h-4" /></button>
           </div>
