@@ -15,13 +15,22 @@ const id = () => crypto.randomBytes(12).toString('hex');
 const now = () => new Date().toISOString();
 const num = (v) => { const n = Number(v); return isNaN(n) ? 0 : n; };
 
-// Trade of a cost: 'Electrical' | 'Mechanical' | null (unassigned).
+// Trade of a cost: 'Electrical' | 'Mechanical' | 'Safety' | null (unassigned).
+// Safety costs are shared: they're split 50/50 between Electrical and Mechanical.
 function normTrade(v) {
   const s = String(v ?? '').trim().toLowerCase();
   if (!s) return null;
   if (s.startsWith('e')) return 'Electrical';
   if (s.startsWith('m')) return 'Mechanical';
+  if (s.startsWith('s')) return 'Safety';
   return null;
+}
+// Add an amount to a per-trade tally, splitting Safety evenly across both trades.
+function addToTrade(tally, trade, amount) {
+  const key = trade || 'Unassigned';
+  if (key === 'Safety') {
+    tally.Electrical += amount / 2; tally.Mechanical += amount / 2; tally.Safety += amount;
+  } else tally[key] += amount;
 }
 // Materials categories carry their trade in the name; other lines use their own trade field.
 function itemTrade(it) {
@@ -116,9 +125,9 @@ function buildSummary(projectId) {
     const catSpend = (label, sp) => ({ label, spend: sp });
 
     // ---- Per-trade spend: payroll + staffing + materials + trade-tagged lines/rentals ----
-    const tradeSpend = { Electrical: elecPay + staffElecPay, Mechanical: mechPay + staffMechPay, Unassigned: 0 };
-    for (const w of weekOut) for (const it of w.items) tradeSpend[itemTrade(it) || 'Unassigned'] += num(it.amount);
-    for (const r of rentalRows) tradeSpend[normTrade(r.trade) || 'Unassigned'] += num(r.cost);
+    const tradeSpend = { Electrical: elecPay + staffElecPay, Mechanical: mechPay + staffMechPay, Safety: 0, Unassigned: 0 };
+    for (const w of weekOut) for (const it of w.items) addToTrade(tradeSpend, itemTrade(it), num(it.amount));
+    for (const r of rentalRows) addToTrade(tradeSpend, normTrade(r.trade), num(r.cost));
 
     // Change orders (computed up front so their $ can be folded into the budget).
     const coRows = db.prepare('SELECT * FROM expense_change_orders WHERE project_id = ? ORDER BY sort_order, co_date').all(p.id);
@@ -131,8 +140,8 @@ function buildSummary(projectId) {
     // Budgets are set per trade. Change orders raise the budget of their trade
     // (unassigned COs raise only the overall budget). Projects created before the
     // split keep their single overall budget until both trade budgets are entered.
-    const coByTrade = { Electrical: 0, Mechanical: 0, Unassigned: 0 };
-    for (const c of coRows) coByTrade[normTrade(c.trade) || 'Unassigned'] += num(c.total);
+    const coByTrade = { Electrical: 0, Mechanical: 0, Safety: 0, Unassigned: 0 };
+    for (const c of coRows) addToTrade(coByTrade, normTrade(c.trade), num(c.total));
     const baseElec = num(p.budget_elec), baseMech = num(p.budget_mech);
     const splitNeeded = baseElec === 0 && baseMech === 0 && num(p.budget_total) > 0;
     const baseBudget = splitNeeded ? num(p.budget_total) : baseElec + baseMech;
@@ -149,12 +158,14 @@ function buildSummary(projectId) {
         remaining: budget - spend,
         pct: budget > 0 ? Math.round((spend / budget) * 100) : 0,
         payroll,
+        safety_share: tradeSpend.Safety / 2,          // this trade's half of Safety spend (included in spend)
         hours: ownHours + staffHours, own_hours: ownHours, staff_hours: staffHours,
       };
     };
     const trades = {
       elec: tradeBlock('Electrical', baseElec, elecHoursOwn, elecHoursStaff, elecPay + staffElecPay),
       mech: tradeBlock('Mechanical', baseMech, mechHoursOwn, mechHoursStaff, mechPay + staffMechPay),
+      safety: { spend: tradeSpend.Safety, change_orders: coByTrade.Safety },
       unassigned: { spend: tradeSpend.Unassigned, change_orders: coByTrade.Unassigned },
       budget_split_needed: splitNeeded,
     };

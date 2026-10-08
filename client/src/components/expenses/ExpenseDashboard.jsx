@@ -52,6 +52,7 @@ export default function ExpenseDashboard({ summary }) {
       hours: sumTrade(scoped, r.key, 'hours'), own: sumTrade(scoped, r.key, 'own_hours'), staff: sumTrade(scoped, r.key, 'staff_hours') };
   }), [scoped]);
   const unassigned = scoped.reduce((s, p) => s + (p.trades?.unassigned?.spend || 0), 0);
+  const safety = scoped.reduce((s, p) => s + (p.trades?.safety?.spend || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -88,6 +89,7 @@ export default function ExpenseDashboard({ summary }) {
             </div>
           ))}
         </div>
+        {safety > 0 && <p className="text-xs text-muted-foreground mt-4">Includes {money(safety)} of Safety purchases, split 50/50 ({money(safety / 2)} each).</p>}
         {unassigned > 0 && <p className="text-xs text-muted-foreground mt-4">{money(unassigned)} of rentals / expense lines has no trade and counts toward the total only.</p>}
       </Card>
 
