@@ -19,6 +19,7 @@ import Highlight from '@/pages/Highlight';
 import SafetyList from '@/pages/SafetyList';
 import SafetyEmployee from '@/pages/SafetyEmployee';
 import SafetyCard from '@/pages/SafetyCard';
+import SafetyTrainingTypes from '@/pages/SafetyTrainingTypes';
 import Tracking from '@/pages/Tracking';
 import Expenses from '@/pages/Expenses';
 import Applications from '@/pages/Applications';
@@ -72,6 +73,9 @@ const AuthenticatedApp = () => {
       <Route path="/highlight" element={<Highlight />} />
       <Route path="/Highlight" element={<Navigate to="/highlight" replace />} />
       <Route path="/safety" element={<SafetyList />} />
+      {/* Explicit route so "training-types" isn't treated as an employee slug by /safety/:slug */}
+      <Route path="/safety/training-types" element={<SafetyTrainingTypes />} />
+      <Route path="/training-types" element={<Navigate to="/safety/training-types" replace />} />
       <Route path="/safety/:slug" element={<SafetyEmployee />} />
       <Route path="/tracking" element={<Tracking />} />
       <Route path="/expenses" element={<Expenses />} />
