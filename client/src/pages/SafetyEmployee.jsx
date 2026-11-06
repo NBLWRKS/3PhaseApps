@@ -7,7 +7,7 @@ import { Navigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Pencil, ShieldCheck, Loader2, X, Check, Camera, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO, differenceInDays } from 'date-fns';
-import logo from '@/assets/logo.jpg';
+import logo from '@/assets/logo-dark.png';
 import AppSwitcher from '@/components/layout/AppSwitcher';
 
 // Compute Valid / Expiring soon / Expired from an expiration date.
@@ -15,8 +15,8 @@ function recordStatus(rec) {
   if (!rec.expires_date) return { label: 'No expiry', cls: 'bg-muted text-muted-foreground' };
   const days = differenceInDays(parseISO(rec.expires_date), new Date());
   if (days < 0) return { label: 'Expired', cls: 'bg-destructive/15 text-destructive' };
-  if (days <= 30) return { label: `Expires in ${days}d`, cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-400' };
-  return { label: 'Valid', cls: 'bg-green-600/15 text-green-700 dark:text-green-400' };
+  if (days <= 30) return { label: `Expires in ${days}d`, cls: 'bg-amber-500/15 text-amber-400' };
+  return { label: 'Valid', cls: 'bg-green-600/15 text-emerald-400' };
 }
 
 function fmt(d) {
@@ -142,8 +142,8 @@ export default function SafetyEmployee() {
       <header className="sticky top-0 z-40 bg-card border-b border-border">
         <div className="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src={logo} alt="3 Phase Conveyor" className="h-7 w-auto" />
-            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2">
+            <img src={logo} alt="3 Phase Conveyor" className="h-5 sm:h-6 w-auto shrink-0 lg:hidden" />
+            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2 lg:border-l-0 lg:pl-0 lg:font-display lg:text-lg lg:text-foreground">
               Safety Credentials
             </span>
           </div>

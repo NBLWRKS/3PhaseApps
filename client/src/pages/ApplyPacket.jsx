@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { PACKET } from '@/lib/applicationPacket';
 import { buildFilledPdfs, fieldId } from '@/lib/fillPacket';
 import { CheckCircle2, Circle, ChevronLeft, ChevronRight, Loader2, Download, FileText, ArrowRight } from 'lucide-react';
-import logo from '@/assets/logo.jpg';
+import logo from '@/assets/logo-dark.png';
 
 const T = {
   en: {
@@ -49,13 +49,13 @@ export default function ApplyPacket() {
     return (
       <Shell>
         <div className="text-center">
-          <img src={logo} alt="3 Phase Conveyor" className="h-14 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-navy mb-1">{T.en.welcome} / {T.es.welcome}</h1>
+          <img src={logo} alt="3 Phase Conveyor" className="h-12 max-w-full mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-foreground mb-1">{T.en.welcome} / {T.es.welcome}</h1>
           <p className="text-muted-foreground text-sm mb-6">{T.en.pick} · {T.es.pick}</p>
           <div className="flex gap-3 justify-center">
             {['en', 'es'].map((l) => (
               <button key={l} onClick={() => { setLang(l); setStepIdx(0); }}
-                className="px-6 py-3 rounded-xl bg-navy text-white font-semibold hover:opacity-90 min-w-[120px]">
+                className="px-6 py-3 rounded-xl bg-primary text-primary-foreground font-semibold hover:opacity-90 min-w-[120px]">
                 {T[l].lang}
               </button>
             ))}
@@ -73,8 +73,8 @@ export default function ApplyPacket() {
     return (
       <Shell>
         <div className="text-center">
-          <CheckCircle2 className="w-14 h-14 text-green-600 mx-auto mb-3" />
-          <h1 className="text-2xl font-bold text-navy mb-2">
+          <CheckCircle2 className="w-14 h-14 text-emerald-400 mx-auto mb-3" />
+          <h1 className="text-2xl font-bold text-foreground mb-2">
             {submitOk ? (lang === 'es' ? 'Solicitud enviada' : 'Application submitted') : (lang === 'es' ? 'Descargue y envíe' : 'Please download & send')}
           </h1>
           <p className="text-sm text-muted-foreground max-w-md mx-auto mb-6">
@@ -88,7 +88,7 @@ export default function ApplyPacket() {
           </p>
           <div className="flex flex-col gap-2 max-w-xs mx-auto">
             {submitOk && (
-              <a href="/onboarding" className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-navy text-white font-semibold">
+              <a href="/onboarding" className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary text-primary-foreground font-semibold">
                 {lang === 'es' ? 'Continuar a la capacitación' : 'Continue to Training'} <ArrowRight className="w-4 h-4" />
               </a>
             )}
@@ -106,7 +106,7 @@ export default function ApplyPacket() {
     return (
       <Shell>
         <Progress forms={forms} current={N} t={t} />
-        <h2 className="text-xl font-bold text-navy mb-1">{t.reviewTitle}</h2>
+        <h2 className="text-xl font-bold text-foreground mb-1">{t.reviewTitle}</h2>
         <p className="text-sm text-muted-foreground mb-4">{t.reviewNote}</p>
         <div className="space-y-2 mb-6">
           {forms.map((f, i) => {
@@ -115,7 +115,7 @@ export default function ApplyPacket() {
               <button key={f.key} onClick={() => setStepIdx(i)}
                 className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-border bg-card text-left hover:bg-secondary">
                 <span className="flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-navy" />
+                  <FileText className="w-4 h-4 text-primary" />
                   <span className="font-medium">{f.title[lang]}</span>
                 </span>
                 <span className="text-xs text-muted-foreground">{count > 0 ? `${count} filled` : '—'}</span>
@@ -143,8 +143,8 @@ export default function ApplyPacket() {
       <Progress forms={forms} current={stepIdx} t={t} />
       <div className="mb-4">
         <div className="text-xs text-muted-foreground mb-1">{t.step} {stepIdx + 1} {t.of} {N}</div>
-        <h2 className="text-xl font-bold text-navy">{form.title[lang]}</h2>
-        {form.note && <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">{form.note[lang]}</p>}
+        <h2 className="text-xl font-bold text-foreground">{form.title[lang]}</h2>
+        {form.note && <p className="text-sm text-amber-300 bg-amber-500/10 border border-amber-500/40 rounded-lg px-3 py-2 mt-2">{form.note[lang]}</p>}
       </div>
 
       {form.sections.map((section, si) => (
@@ -165,7 +165,7 @@ export default function ApplyPacket() {
           <ChevronLeft className="w-4 h-4" /> {t.back}
         </button>
         <button onClick={() => setStepIdx((s) => s + 1)}
-          className="flex items-center gap-2 px-5 py-3 rounded-xl bg-navy text-white font-semibold">
+          className="flex items-center gap-2 px-5 py-3 rounded-xl bg-primary text-primary-foreground font-semibold">
           {stepIdx === N - 1 ? t.review : t.next} <ChevronRight className="w-4 h-4" />
         </button>
       </div>
@@ -238,8 +238,8 @@ function downloadAll(pdfs) {
 // ---------- small components ----------
 function Shell({ children }) {
   return (
-    <div className="min-h-screen bg-neutral-100 py-6 px-4">
-      <div className="max-w-lg mx-auto bg-white rounded-2xl shadow-sm border border-border p-5 sm:p-6">
+    <div className="min-h-screen bg-background py-6 px-4">
+      <div className="max-w-lg mx-auto bg-card rounded-2xl shadow-sm border border-border p-5 sm:p-6">
         {children}
       </div>
     </div>
@@ -251,10 +251,10 @@ function Progress({ forms, current, t }) {
     <div className="flex items-center gap-1.5 mb-5">
       {forms.map((f, i) => (
         <div key={f.key} className="flex-1 flex items-center gap-1.5">
-          {i < current ? <CheckCircle2 className="w-4 h-4 text-green-600 flex-none" />
-            : i === current ? <Circle className="w-4 h-4 text-navy fill-navy/10 flex-none" />
-            : <Circle className="w-4 h-4 text-neutral-300 flex-none" />}
-          <div className={`h-1 flex-1 rounded ${i < current ? 'bg-green-600' : 'bg-neutral-200'}`} />
+          {i < current ? <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-none" />
+            : i === current ? <Circle className="w-4 h-4 text-foreground fill-primary/10 flex-none" />
+            : <Circle className="w-4 h-4 text-muted-foreground/50 flex-none" />}
+          <div className={`h-1 flex-1 rounded ${i < current ? 'bg-primary' : 'bg-secondary'}`} />
         </div>
       ))}
     </div>
@@ -266,7 +266,7 @@ function FieldInput({ field, lang, value, onChange }) {
   if (field.type === 'fixed') {
     return (
       <div>
-        <label className="text-sm font-medium text-navy">{label}</label>
+        <label className="text-sm font-medium text-foreground">{label}</label>
         <div className="mt-1 px-3 py-2 rounded-lg border border-border bg-muted text-sm text-muted-foreground">{field.value}</div>
       </div>
     );
@@ -274,11 +274,11 @@ function FieldInput({ field, lang, value, onChange }) {
   if (field.type === 'yesno') {
     return (
       <div>
-        <label className="text-sm font-medium text-navy block mb-1.5">{label}</label>
+        <label className="text-sm font-medium text-foreground block mb-1.5">{label}</label>
         <div className="flex gap-2">
           {[['yes', lang === 'es' ? 'Sí' : 'Yes'], ['no', 'No']].map(([v, lbl]) => (
             <button key={v} type="button" onClick={() => onChange(v)}
-              className={`px-4 py-2 rounded-lg border text-sm font-medium ${value === v ? 'bg-navy text-white border-navy' : 'border-border bg-card'}`}>
+              className={`px-4 py-2 rounded-lg border text-sm font-medium ${value === v ? 'bg-primary text-primary-foreground border-primary' : 'border-border bg-card'}`}>
               {lbl}
             </button>
           ))}
@@ -289,11 +289,11 @@ function FieldInput({ field, lang, value, onChange }) {
   if (field.type === 'radio') {
     return (
       <div>
-        <label className="text-sm font-medium text-navy block mb-1.5">{label}</label>
+        <label className="text-sm font-medium text-foreground block mb-1.5">{label}</label>
         <div className="space-y-1.5">
           {field.options.map((o) => (
             <button key={o.value} type="button" onClick={() => onChange(o.value)}
-              className={`w-full text-left px-3 py-2 rounded-lg border text-sm ${value === o.value ? 'bg-navy text-white border-navy' : 'border-border bg-card'}`}>
+              className={`w-full text-left px-3 py-2 rounded-lg border text-sm ${value === o.value ? 'bg-primary text-primary-foreground border-primary' : 'border-border bg-card'}`}>
               {o.label[lang]}
             </button>
           ))}
@@ -304,9 +304,9 @@ function FieldInput({ field, lang, value, onChange }) {
   if (field.type === 'state') {
     return (
       <div>
-        <label className="text-sm font-medium text-navy">{label}</label>
+        <label className="text-sm font-medium text-foreground">{label}</label>
         <select value={value || ''} onChange={(e) => onChange(e.target.value)}
-          className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-card text-sm outline-none focus:border-navy">
+          className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-card text-sm outline-none focus:border-primary">
           <option value="">—</option>
           {US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
@@ -316,10 +316,10 @@ function FieldInput({ field, lang, value, onChange }) {
   const inputType = field.type === 'email' ? 'email' : field.type === 'tel' ? 'tel' : 'text';
   return (
     <div>
-      <label className="text-sm font-medium text-navy">{label}</label>
+      <label className="text-sm font-medium text-foreground">{label}</label>
       <input type={inputType} value={value || ''} onChange={(e) => onChange(e.target.value)}
         inputMode={field.type === 'ssn' || field.type === 'tel' ? 'numeric' : undefined}
-        className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-card text-sm outline-none focus:border-navy" />
+        className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-card text-sm outline-none focus:border-primary" />
     </div>
   );
 }

@@ -8,23 +8,23 @@ import {
   Download, Ban, FolderPlus, Layers, Copy, StickyNote, X, GripVertical,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import logo from '@/assets/logo.jpg';
+import logo from '@/assets/logo-dark.png';
 import AppSwitcher from '@/components/layout/AppSwitcher';
 import TrackingDashboard from '@/components/tracking/TrackingDashboard';
 import { exportTrackingXlsx } from '@/lib/trackingExport';
 
 const STATUS_META = {
-  not_started: { label: 'Not started', color: '#9aa3af', bg: 'bg-neutral-100 text-neutral-600' },
-  in_progress: { label: 'In progress', color: '#2C6E9B', bg: 'bg-blue-50 text-blue-700' },
-  complete: { label: 'Complete', color: '#2E7D5B', bg: 'bg-green-50 text-green-700' },
-  blocked: { label: 'Blocked', color: '#C0392B', bg: 'bg-red-50 text-red-700' },
+  not_started: { label: 'Not started', color: '#9aa3af', bg: 'bg-secondary text-muted-foreground' },
+  in_progress: { label: 'In progress', color: '#6E9BC8', bg: 'bg-sky-500/15 text-sky-300' },
+  complete: { label: 'Complete', color: '#4CB37F', bg: 'bg-emerald-500/15 text-emerald-300' },
+  blocked: { label: 'Blocked', color: '#E5534B', bg: 'bg-red-500/15 text-red-300' },
 };
 
 function pctColor(p) {
-  if (p >= 100) return '#2E7D5B';
-  if (p >= 50) return '#2C6E9B';
+  if (p >= 100) return '#4CB37F';
+  if (p >= 50) return '#6E9BC8';
   if (p > 0) return '#E8B33D';
-  return '#cbd5e1';
+  return '#55555C';
 }
 
 // Native HTML5 drag-and-drop reordering for one list. Scoped per component
@@ -82,7 +82,7 @@ function DragHandle({ handleProps, className = '' }) {
   return (
     <span {...handleProps}
       title="Drag to reorder"
-      className={`cursor-grab active:cursor-grabbing text-neutral-300 hover:text-muted-foreground ${className}`}>
+      className={`cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground ${className}`}>
       <GripVertical className="w-4 h-4" />
     </span>
   );
@@ -205,8 +205,8 @@ export default function Tracking() {
       <header className="sticky top-0 z-40 bg-card border-b border-border">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src={logo} alt="3 Phase Conveyor" className="h-7 w-auto" />
-            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2">
+            <img src={logo} alt="3 Phase Conveyor" className="h-5 sm:h-6 w-auto shrink-0 lg:hidden" />
+            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2 lg:border-l-0 lg:pl-0 lg:font-display lg:text-lg lg:text-foreground">
               Project Tracking
             </span>
           </div>
@@ -284,7 +284,7 @@ export default function Tracking() {
 function ProgressBar({ percent }) {
   return (
     <div className="flex items-center gap-2 min-w-[110px]">
-      <div className="flex-1 h-2 rounded-full bg-neutral-200 overflow-hidden">
+      <div className="flex-1 h-2 rounded-full bg-secondary overflow-hidden">
         <div className="h-full rounded-full" style={{ width: `${percent}%`, backgroundColor: pctColor(percent) }} />
       </div>
       <span className="text-xs font-semibold tabular-nums w-9 text-right">{percent}%</span>
@@ -307,7 +307,7 @@ function ProjectBlock({ project: p, editable, expanded, toggle, onAddArea, onAdd
         </button>
         <span className="font-bold text-lg flex-1 truncate">{p.name}</span>
         <div className="hidden sm:flex items-center gap-1.5 text-xs">
-          {sc.blocked > 0 && <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700">{sc.blocked} blocked</span>}
+          {sc.blocked > 0 && <span className="px-2 py-0.5 rounded-full bg-red-500/15 text-red-300">{sc.blocked} blocked</span>}
           <span className="text-muted-foreground">{p.task_count} tasks · {p.area_count} areas</span>
         </div>
         <div className="w-40"><ProgressBar percent={p.percent} /></div>
@@ -426,7 +426,7 @@ function TaskRow({ task: t, editable, onSave, onDelete, dragHandleProps, dropPro
         {editable ? (
           <input value={local.name} onChange={(e) => setLocal((l) => ({ ...l, name: e.target.value }))}
             onBlur={(e) => e.target.value !== t.name && commit({ name: e.target.value })}
-            className="w-full bg-transparent outline-none focus:bg-white focus:text-neutral-900 focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5" />
+            className="w-full bg-transparent outline-none focus:bg-background focus:text-foreground focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5" />
         ) : <span>{t.name}</span>}
       </td>
       <td className="px-2 py-1.5">
@@ -434,7 +434,7 @@ function TaskRow({ task: t, editable, onSave, onDelete, dragHandleProps, dropPro
           <input type="number" min="0" max="100" value={local.percent}
             onChange={(e) => setLocal((l) => ({ ...l, percent: e.target.value }))}
             onBlur={(e) => Number(e.target.value) !== t.percent && commit({ percent: Number(e.target.value) })}
-            className="w-16 bg-transparent outline-none focus:bg-white focus:text-neutral-900 focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5 tabular-nums" />
+            className="w-16 bg-transparent outline-none focus:bg-background focus:text-foreground focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5 tabular-nums" />
         ) : <span className="tabular-nums">{t.percent}%</span>}
       </td>
       <td className="px-2 py-1.5">
@@ -442,7 +442,7 @@ function TaskRow({ task: t, editable, onSave, onDelete, dragHandleProps, dropPro
           <input type="number" min="0" step="0.5" value={local.weight}
             onChange={(e) => setLocal((l) => ({ ...l, weight: e.target.value }))}
             onBlur={(e) => Number(e.target.value) !== t.weight && commit({ weight: Number(e.target.value) })}
-            className="w-12 bg-transparent outline-none focus:bg-white focus:text-neutral-900 focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5 tabular-nums" />
+            className="w-12 bg-transparent outline-none focus:bg-background focus:text-foreground focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5 tabular-nums" />
         ) : <span className="tabular-nums">{t.weight}</span>}
       </td>
       <td className="px-2 py-1.5">
@@ -451,7 +451,7 @@ function TaskRow({ task: t, editable, onSave, onDelete, dragHandleProps, dropPro
           {editable && (
             <button onClick={() => commit({ blocked: !local.blocked })}
               title={local.blocked ? 'Unblock' : 'Mark blocked'}
-              className={`p-0.5 rounded ${local.blocked ? 'text-red-600' : 'text-neutral-300 hover:text-red-500'}`}>
+              className={`p-0.5 rounded ${local.blocked ? 'text-red-400' : 'text-muted-foreground/50 hover:text-red-400'}`}>
               <Ban className="w-3.5 h-3.5" />
             </button>
           )}
@@ -462,7 +462,7 @@ function TaskRow({ task: t, editable, onSave, onDelete, dragHandleProps, dropPro
           <input value={local.assignee || ''} placeholder="—"
             onChange={(e) => setLocal((l) => ({ ...l, assignee: e.target.value }))}
             onBlur={(e) => (e.target.value || '') !== (t.assignee || '') && commit({ assignee: e.target.value })}
-            className="w-full bg-transparent outline-none focus:bg-white focus:text-neutral-900 focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5" />
+            className="w-full bg-transparent outline-none focus:bg-background focus:text-foreground focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5" />
         ) : <span className="text-muted-foreground">{t.assignee || '—'}</span>}
       </td>
       <td className="px-2 py-1.5 hidden lg:table-cell">
@@ -470,7 +470,7 @@ function TaskRow({ task: t, editable, onSave, onDelete, dragHandleProps, dropPro
           <input type="date" value={local.target_date || ''}
             onChange={(e) => setLocal((l) => ({ ...l, target_date: e.target.value }))}
             onBlur={(e) => (e.target.value || '') !== (t.target_date || '') && commit({ target_date: e.target.value })}
-            className="bg-transparent outline-none focus:bg-white focus:text-neutral-900 focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5 text-muted-foreground" />
+            className="bg-transparent outline-none focus:bg-background focus:text-foreground focus:ring-1 focus:ring-primary/40 rounded px-1 py-0.5 text-muted-foreground" />
         ) : <span className="text-muted-foreground">{t.target_date || '—'}</span>}
       </td>
       <td className="px-2 py-1.5 text-center relative">
@@ -478,7 +478,7 @@ function TaskRow({ task: t, editable, onSave, onDelete, dragHandleProps, dropPro
           onClick={() => (editable ? setNotesOpen((o) => !o) : (hasNote && setNotesOpen((o) => !o)))}
           title={hasNote ? 'View / edit note' : (editable ? 'Add note' : 'No note')}
           disabled={!editable && !hasNote}
-          className={`p-0.5 rounded ${hasNote ? 'text-primary' : 'text-neutral-300 hover:text-primary'} ${!editable && !hasNote ? 'opacity-40 cursor-default' : ''}`}>
+          className={`p-0.5 rounded ${hasNote ? 'text-primary' : 'text-muted-foreground/50 hover:text-primary'} ${!editable && !hasNote ? 'opacity-40 cursor-default' : ''}`}>
           <StickyNote className="w-4 h-4" fill={hasNote ? 'currentColor' : 'none'} />
         </button>
         {notesOpen && (
@@ -523,7 +523,7 @@ function NotesPopup({ value, editable, onChange, onClose, onSave, taskName }) {
           <textarea
             value={value} onChange={(e) => onChange(e.target.value)} rows={4} autoFocus
             placeholder="Add a note for this task…"
-            className="w-full text-sm bg-white text-neutral-900 border border-border rounded p-2 outline-none focus:ring-1 focus:ring-primary/40 resize-none" />
+            className="w-full text-sm bg-background text-foreground border border-border rounded p-2 outline-none focus:ring-1 focus:ring-primary/40 resize-none" />
           <div className="flex justify-end gap-2 mt-2">
             <button onClick={onClose} className="text-xs px-2 py-1 rounded text-muted-foreground hover:bg-secondary">Cancel</button>
             <button onClick={onSave} className="text-xs px-3 py-1 rounded bg-primary text-primary-foreground font-medium">Save</button>

@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { base44 } from '@/api/base44Client';
 import { renderPdfAllPages } from '@/lib/pdf-render';
 import { canRead, canEdit } from '@/lib/permissions';
-import logo from '@/assets/logo.jpg';
+import logo from '@/assets/logo-dark.png';
 import AppSwitcher from '@/components/layout/AppSwitcher';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -529,8 +529,8 @@ export default function Highlight() {
       <header className="sticky top-0 z-40 bg-card border-b border-border">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={logo} alt="3 Phase Conveyor" className="h-8 w-auto" />
-            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-3">
+            <img src={logo} alt="3 Phase Conveyor" className="h-5 sm:h-6 w-auto shrink-0 lg:hidden" />
+            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-3 lg:border-l-0 lg:pl-0 lg:font-display lg:text-lg lg:text-foreground">
               Highlight
             </span>
           </div>

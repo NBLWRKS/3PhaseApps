@@ -13,6 +13,7 @@ import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
 
 import AppLayout from '@/components/layout/AppLayout';
+import ShellLayout from '@/components/layout/ShellLayout';
 import Landing from '@/pages/Landing';
 import Admin from '@/pages/Admin';
 import Highlight from '@/pages/Highlight';
@@ -36,7 +37,7 @@ const AuthenticatedApp = () => {
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+        <div className="w-8 h-8 border-4 border-border border-t-primary rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -67,34 +68,38 @@ const AuthenticatedApp = () => {
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
 
-      {/* Public splash page listing available apps */}
-      <Route path="/" element={<Landing />} />
-      <Route path="/admin" element={<Admin />} />
-      <Route path="/highlight" element={<Highlight />} />
-      <Route path="/Highlight" element={<Navigate to="/highlight" replace />} />
-      <Route path="/safety" element={<SafetyList />} />
-      {/* Explicit route so "training-types" isn't treated as an employee slug by /safety/:slug */}
-      <Route path="/safety/training-types" element={<SafetyTrainingTypes />} />
       <Route path="/training-types" element={<Navigate to="/safety/training-types" replace />} />
-      <Route path="/safety/:slug" element={<SafetyEmployee />} />
-      <Route path="/tracking" element={<Tracking />} />
-      <Route path="/expenses" element={<Expenses />} />
-      <Route path="/applications" element={<Applications />} />
       <Route path="/apply" element={<ApplyPacket />} />
       <Route path="/onboarding" element={<Onboarding />} />
-      <Route path="/onboarding-admin" element={<OnboardingAdmin />} />
       {/* Capitalized URL form from the spec, e.g. /SafetyCredentials/DayanaAballay/ */}
       <Route path="/SafetyCredentials" element={<Navigate to="/safety" replace />} />
       <Route path="/SafetyCredentials/:slug" element={<SafetyCard />} />
       {/* lowercase alias so a hand-typed URL still reaches the public card */}
       <Route path="/safetycredentials/:slug" element={<SafetyCard />} />
 
-      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
-        <Route element={<AppLayout />}>
-          <Route path="/reports" element={<Dashboard />} />
-          <Route path="/reports/new" element={<ReportEditor />} />
-          <Route path="/reports/:id" element={<ReportView />} />
-          <Route path="/reports/:id/edit" element={<ReportEditor />} />
+      {/* Signed-in app pages share the sidebar shell (wide screens only). */}
+      <Route element={<ShellLayout />}>
+        {/* Splash page: public, and the app picker once signed in */}
+        <Route path="/" element={<Landing />} />
+        <Route path="/admin" element={<Admin />} />
+        <Route path="/highlight" element={<Highlight />} />
+        {/* Old capitalized link. Route matching ignores case, so this must come after /highlight. */}
+        <Route path="/Highlight" element={<Navigate to="/highlight" replace />} />
+        <Route path="/safety" element={<SafetyList />} />
+        {/* Explicit route so "training-types" isn't treated as an employee slug by /safety/:slug */}
+        <Route path="/safety/training-types" element={<SafetyTrainingTypes />} />
+        <Route path="/safety/:slug" element={<SafetyEmployee />} />
+        <Route path="/tracking" element={<Tracking />} />
+        <Route path="/expenses" element={<Expenses />} />
+        <Route path="/applications" element={<Applications />} />
+        <Route path="/onboarding-admin" element={<OnboardingAdmin />} />
+        <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+          <Route element={<AppLayout />}>
+            <Route path="/reports" element={<Dashboard />} />
+            <Route path="/reports/new" element={<ReportEditor />} />
+            <Route path="/reports/:id" element={<ReportView />} />
+            <Route path="/reports/:id/edit" element={<ReportEditor />} />
+          </Route>
         </Route>
       </Route>
 

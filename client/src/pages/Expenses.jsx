@@ -9,7 +9,7 @@ import {
   Package, Truck, Users, Pencil, FileText, Wallet, Clock, X, Combine,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import logo from '@/assets/logo.jpg';
+import logo from '@/assets/logo-dark.png';
 import AppSwitcher from '@/components/layout/AppSwitcher';
 import ExpenseDashboard from '@/components/expenses/ExpenseDashboard';
 import { exportExpensesCsv } from '@/lib/expensesExport';
@@ -18,20 +18,20 @@ const money = (n) => '$' + (Number(n) || 0).toLocaleString(undefined, { maximumF
 const num = (v) => (v === '' || v == null ? 0 : Number(v));
 
 function budgetColor(pct) {
-  if (pct >= 100) return 'hsl(0 72% 45%)';
+  if (pct >= 100) return 'hsl(3 75% 62%)';
   if (pct >= 85) return 'hsl(38 92% 50%)';
-  return 'hsl(160 84% 34%)';
+  return 'hsl(150 55% 50%)';
 }
 
 // The seven budgeted categories: key, label, icon, tint.
 const BUDGET_CATS = [
-  ['elec', 'Electrical Payroll', Zap, 'hsl(208 75% 42%)'],
-  ['mech', 'Mechanical Payroll', Wrench, 'hsl(160 84% 34%)'],
-  ['staff_elec', 'Staffing – Electrical', Users, 'hsl(230 60% 55%)'],
-  ['staff_mech', 'Staffing – Mechanical', Users, 'hsl(190 65% 40%)'],
-  ['materials_elec', 'Materials – Electrical', Package, 'hsl(38 92% 50%)'],
-  ['materials_mech', 'Materials – Mechanical', Package, 'hsl(30 60% 45%)'],
-  ['rental', 'Equipment Rental', Truck, 'hsl(280 45% 55%)'],
+  ['elec', 'Electrical Payroll', Zap, 'hsl(44 66% 50%)'],
+  ['mech', 'Mechanical Payroll', Wrench, 'hsl(240 6% 85%)'],
+  ['staff_elec', 'Staffing – Electrical', Users, 'hsl(43 60% 72%)'],
+  ['staff_mech', 'Staffing – Mechanical', Users, 'hsl(213 40% 60%)'],
+  ['materials_elec', 'Materials – Electrical', Package, 'hsl(32 75% 55%)'],
+  ['materials_mech', 'Materials – Mechanical', Package, 'hsl(200 15% 62%)'],
+  ['rental', 'Equipment Rental', Truck, 'hsl(270 30% 66%)'],
   ['other', 'Other', FileText, 'hsl(0 0% 55%)'],
 ];
 
@@ -148,8 +148,8 @@ export default function Expenses() {
       <header className="sticky top-0 z-40 bg-card/80 backdrop-blur border-b border-border">
         <div className="max-w-7xl mx-auto px-5 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src={logo} alt="3 Phase Conveyor" className="h-7 w-auto" />
-            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2.5">Expense Tracking</span>
+            <img src={logo} alt="3 Phase Conveyor" className="h-5 sm:h-6 w-auto shrink-0 lg:hidden" />
+            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2.5 lg:border-l-0 lg:pl-0 lg:font-display lg:text-lg lg:text-foreground">Expense Tracking</span>
           </div>
           <AppSwitcher />
         </div>
@@ -266,7 +266,7 @@ function BudgetModal({ project, onClose, onSaved }) {
           </div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {[['Electrical budget', elec, setElec, Zap, 'hsl(208 75% 42%)'], ['Mechanical budget', mech, setMech, Wrench, 'hsl(160 84% 34%)']].map(([label, val, set, Icon, tint], i) => (
+          {[['Electrical budget', elec, setElec, Zap, 'hsl(44 66% 50%)'], ['Mechanical budget', mech, setMech, Wrench, 'hsl(240 6% 85%)']].map(([label, val, set, Icon, tint], i) => (
             <div key={label}>
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1"><Icon className="w-3.5 h-3.5" style={{ color: tint }} /> {label}</label>
               <div className="inline-flex items-center rounded-lg border border-border bg-background focus-within:ring-2 focus-within:ring-primary/30 w-full mt-1">
@@ -465,7 +465,7 @@ const TRADES = ['Electrical', 'Mechanical', 'Safety']; // Safety is split 50/50 
 function TradeSelect({ value, onChange, className = '' }) {
   return (
     <select value={value || ''} onChange={(e) => onChange(e.target.value || null)} aria-label="Trade"
-      className={`bg-card border rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-primary/30 ${value ? 'border-border' : 'border-amber-500/60 text-amber-700'} ${className}`}>
+      className={`bg-card border rounded-lg px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-primary/30 ${value ? 'border-border' : 'border-amber-500/60 text-amber-400'} ${className}`}>
       <option value="">Pick trade…</option>
       {TRADES.map((t) => <option key={t} value={t}>{t}</option>)}
     </select>
@@ -516,14 +516,14 @@ function ProjectCard({ project: p, editable, categories, onMergeWeeks, onAddWeek
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         <StatTile icon={DollarSign} label="Total spend" value={money(t.total)}
           sub={t.budget > 0 ? `${t.budget_pct}% of ${money(t.budget)} overall budget` : 'no budget set'}
-          tint={t.budget > 0 ? budgetColor(t.budget_pct) : 'hsl(208 75% 55%)'} />
+          tint={t.budget > 0 ? budgetColor(t.budget_pct) : 'hsl(44 66% 55%)'} />
         <TradeBudgetTile label="Electrical budget" icon={Zap} tr={tr.elec} legacy={tr.budget_split_needed} />
         <TradeBudgetTile label="Mechanical budget" icon={Wrench} tr={tr.mech} legacy={tr.budget_split_needed} />
-        <StatTile icon={Users} label="Payroll" value={money(t.payroll)} sub="own + staffing" tint="hsl(160 84% 42%)" />
+        <StatTile icon={Users} label="Payroll" value={money(t.payroll)} sub="own + staffing" tint="hsl(44 66% 50%)" />
         <StatTile icon={Clock} label="Electrical man hours" value={fmtHrs(tr.elec?.hours)}
-          sub={`${fmtHrs(tr.elec?.own_hours)} own + ${fmtHrs(tr.elec?.staff_hours)} staffing`} tint="hsl(208 75% 42%)" />
+          sub={`${fmtHrs(tr.elec?.own_hours)} own + ${fmtHrs(tr.elec?.staff_hours)} staffing`} tint="hsl(44 66% 50%)" />
         <StatTile icon={Clock} label="Mechanical man hours" value={fmtHrs(tr.mech?.hours)}
-          sub={`${fmtHrs(tr.mech?.own_hours)} own + ${fmtHrs(tr.mech?.staff_hours)} staffing`} tint="hsl(160 84% 34%)" />
+          sub={`${fmtHrs(tr.mech?.own_hours)} own + ${fmtHrs(tr.mech?.staff_hours)} staffing`} tint="hsl(240 6% 85%)" />
       </div>
       {(tr.budget_split_needed || (tr.unassigned?.spend || 0) > 0 || (tr.unassigned?.change_orders || 0) > 0) && (
         <div className="text-xs rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 space-y-0.5">
@@ -849,7 +849,7 @@ function PurchaseOrders({ project: p, editable, onAddPO, onSavePO, onDelPO }) {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
         <div className="rounded-xl border border-border bg-card p-3">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">PO Received</div>
-          <div className="text-xl font-bold tabular-nums mt-0.5" style={{ color: 'hsl(160 84% 42%)' }}>{money(received)}</div>
+          <div className="text-xl font-bold tabular-nums mt-0.5" style={{ color: 'hsl(150 55% 50%)' }}>{money(received)}</div>
           <div className="text-[11px] text-muted-foreground mt-0.5">{money(t.paid)} paid · {money(t.unpaid)} unpaid</div>
         </div>
         <div className="rounded-xl border border-border bg-card p-3">
@@ -859,14 +859,14 @@ function PurchaseOrders({ project: p, editable, onAddPO, onSavePO, onDelPO }) {
         </div>
         <div className="rounded-xl border border-border bg-card p-3">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Net (Received − Spent)</div>
-          <div className="text-xl font-bold tabular-nums mt-0.5" style={{ color: net >= 0 ? 'hsl(160 84% 42%)' : 'hsl(0 72% 55%)' }}>{money(net)}</div>
+          <div className="text-xl font-bold tabular-nums mt-0.5" style={{ color: net >= 0 ? 'hsl(150 55% 50%)' : 'hsl(3 75% 62%)' }}>{money(net)}</div>
           <div className="text-[11px] text-muted-foreground mt-0.5">{net >= 0 ? 'received exceeds spend' : 'spend exceeds received'}</div>
         </div>
         <div className="rounded-xl border border-border bg-card p-3">
           <div className="text-xs text-muted-foreground uppercase tracking-wide">Spent vs. PO</div>
-          <div className="text-xl font-bold tabular-nums mt-0.5" style={{ color: pctSpentOfPO >= 100 ? 'hsl(0 72% 55%)' : 'hsl(208 75% 55%)' }}>{received > 0 ? `${pctSpentOfPO}%` : '—'}</div>
+          <div className="text-xl font-bold tabular-nums mt-0.5" style={{ color: pctSpentOfPO >= 100 ? 'hsl(3 75% 62%)' : 'hsl(44 66% 55%)' }}>{received > 0 ? `${pctSpentOfPO}%` : '—'}</div>
           <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-1.5">
-            <div className="h-full rounded-full" style={{ width: `${Math.min(100, pctSpentOfPO)}%`, backgroundColor: pctSpentOfPO >= 100 ? 'hsl(0 72% 55%)' : 'hsl(208 75% 55%)' }} />
+            <div className="h-full rounded-full" style={{ width: `${Math.min(100, pctSpentOfPO)}%`, backgroundColor: pctSpentOfPO >= 100 ? 'hsl(3 75% 62%)' : 'hsl(44 66% 55%)' }} />
           </div>
         </div>
       </div>
@@ -1012,13 +1012,13 @@ function WeekCard({ week: w, editable, categories, onSaveWeek, onDelWeek, onAddI
       <div className="p-4 space-y-4">
         {/* Four payroll buckets */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <PayrollBox label="Electrical" icon={Zap} tint="hsl(208 75% 42%)" pay={w.elec_pay} hours={w.elec_hours} editable={editable}
+          <PayrollBox label="Electrical" icon={Zap} tint="hsl(44 66% 50%)" pay={w.elec_pay} hours={w.elec_hours} editable={editable}
             onPay={(v) => onSaveWeek(w, { elec_pay: v })} onHours={(v) => onSaveWeek(w, { elec_hours: v })} />
-          <PayrollBox label="Mechanical" icon={Wrench} tint="hsl(160 84% 34%)" pay={w.mech_pay} hours={w.mech_hours} editable={editable}
+          <PayrollBox label="Mechanical" icon={Wrench} tint="hsl(240 6% 85%)" pay={w.mech_pay} hours={w.mech_hours} editable={editable}
             onPay={(v) => onSaveWeek(w, { mech_pay: v })} onHours={(v) => onSaveWeek(w, { mech_hours: v })} />
-          <PayrollBox label="Staffing Elec" icon={Users} tint="hsl(230 60% 55%)" pay={w.staff_elec_pay} hours={w.staff_elec_hours} editable={editable}
+          <PayrollBox label="Staffing Elec" icon={Users} tint="hsl(43 60% 72%)" pay={w.staff_elec_pay} hours={w.staff_elec_hours} editable={editable}
             onPay={(v) => onSaveWeek(w, { staff_elec_pay: v })} onHours={(v) => onSaveWeek(w, { staff_elec_hours: v })} />
-          <PayrollBox label="Staffing Mech" icon={Users} tint="hsl(190 65% 40%)" pay={w.staff_mech_pay} hours={w.staff_mech_hours} editable={editable}
+          <PayrollBox label="Staffing Mech" icon={Users} tint="hsl(213 40% 60%)" pay={w.staff_mech_pay} hours={w.staff_mech_hours} editable={editable}
             onPay={(v) => onSaveWeek(w, { staff_mech_pay: v })} onHours={(v) => onSaveWeek(w, { staff_mech_hours: v })} />
         </div>
 

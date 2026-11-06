@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { canRead, canEdit } from '@/lib/permissions';
 import { ArrowLeft, Plus, Trash2, Loader2, Tag } from 'lucide-react';
 import { toast } from 'sonner';
-import logo from '@/assets/logo.jpg';
+import logo from '@/assets/logo-dark.png';
 import AppSwitcher from '@/components/layout/AppSwitcher';
 
 export default function SafetyTrainingTypes() {
@@ -63,8 +63,8 @@ export default function SafetyTrainingTypes() {
       <header className="sticky top-0 z-40 bg-card border-b border-border">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src={logo} alt="3 Phase Conveyor" className="h-7 w-auto" />
-            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2">
+            <img src={logo} alt="3 Phase Conveyor" className="h-5 sm:h-6 w-auto shrink-0 lg:hidden" />
+            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2 lg:border-l-0 lg:pl-0 lg:font-display lg:text-lg lg:text-foreground">
               Safety Credentials
             </span>
           </div>

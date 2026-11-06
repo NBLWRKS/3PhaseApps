@@ -6,12 +6,13 @@ import {
 import { DollarSign, Clock, Wallet, Zap, Wrench } from 'lucide-react';
 
 const money = (n) => '$' + (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
-const CAT_COLORS = ['hsl(208 75% 42%)', 'hsl(160 84% 34%)', 'hsl(38 92% 50%)', 'hsl(280 45% 55%)', 'hsl(0 72% 55%)', 'hsl(190 70% 42%)', 'hsl(30 50% 45%)', 'hsl(230 55% 55%)'];
+// Gold, silver, then distinct steel/green/copper/red/violet/teal tones that read on black.
+const CAT_COLORS = ['hsl(44 66% 50%)', 'hsl(240 6% 85%)', 'hsl(213 40% 60%)', 'hsl(140 45% 52%)', 'hsl(24 60% 55%)', 'hsl(3 70% 62%)', 'hsl(270 30% 66%)', 'hsl(180 35% 50%)'];
 
 function budgetColor(pct) {
-  if (pct >= 100) return 'hsl(0 72% 45%)';
+  if (pct >= 100) return 'hsl(3 75% 62%)';
   if (pct >= 85) return 'hsl(38 92% 50%)';
-  return 'hsl(160 84% 34%)';
+  return 'hsl(150 55% 50%)';
 }
 
 export default function ExpenseDashboard({ summary }) {
@@ -101,7 +102,7 @@ export default function ExpenseDashboard({ summary }) {
               <XAxis type="number" tickFormatter={money} fontSize={11} stroke="hsl(var(--muted-foreground))" />
               <YAxis type="category" dataKey="name" width={110} fontSize={12} stroke="hsl(var(--muted-foreground))" />
               <Tooltip formatter={(v) => money(v)} contentStyle={tooltipStyle} cursor={{ fill: 'hsl(var(--muted))' }} />
-              <Bar dataKey="total" radius={[0, 6, 6, 0]} fill="hsl(208 75% 42%)" />
+              <Bar dataKey="total" radius={[0, 6, 6, 0]} fill="hsl(44 66% 50%)" />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -126,15 +127,15 @@ export default function ExpenseDashboard({ summary }) {
               <AreaChart data={trendData} margin={{ left: 8, right: 20, top: 8, bottom: 4 }}>
                 <defs>
                   <linearGradient id="spendFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(208 75% 42%)" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="hsl(208 75% 42%)" stopOpacity={0.03} />
+                    <stop offset="0%" stopColor="hsl(44 66% 50%)" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="hsl(44 66% 50%)" stopOpacity={0.03} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="2 4" stroke="hsl(var(--border))" />
                 <XAxis dataKey="week" fontSize={11} stroke="hsl(var(--muted-foreground))" />
                 <YAxis tickFormatter={money} fontSize={11} stroke="hsl(var(--muted-foreground))" />
                 <Tooltip formatter={(v) => money(v)} contentStyle={tooltipStyle} />
-                <Area type="monotone" dataKey="total" stroke="hsl(208 75% 42%)" strokeWidth={2.5} fill="url(#spendFill)" dot={{ r: 3, fill: 'hsl(208 75% 42%)' }} />
+                <Area type="monotone" dataKey="total" stroke="hsl(44 66% 50%)" strokeWidth={2.5} fill="url(#spendFill)" dot={{ r: 3, fill: 'hsl(44 66% 50%)' }} />
               </AreaChart>
             </ResponsiveContainer>
           )}

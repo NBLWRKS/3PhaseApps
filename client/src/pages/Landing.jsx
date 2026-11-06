@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
-import logo from '@/assets/logo.jpg';
+import logo from '@/assets/logo-dark.png';
 import { FileText, ArrowRight, Zap, Wrench, Clock, LogOut, Shield, Loader2, Highlighter, ShieldCheck, BarChart3, DollarSign, FolderOpen, GraduationCap } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
@@ -103,17 +103,14 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-hidden">
-      {/* Decorative spectrum wave echoing the logo, top-right */}
+      {/* Soft gold glow, top-right */}
       <div
-        className="pointer-events-none absolute -top-32 -right-32 w-[42rem] h-[42rem] rounded-full opacity-[0.07] blur-3xl"
-        style={{
-          background:
-            'conic-gradient(from 180deg, #e0211b, #f5a623, #f8e71c, #3fae46, #1f7bc2, #7b4ea0, #e0211b)',
-        }}
+        className="pointer-events-none absolute -top-40 -right-40 w-[42rem] h-[42rem] rounded-full opacity-[0.12] blur-3xl"
+        style={{ background: 'radial-gradient(circle, #D4A72C 0%, transparent 65%)' }}
       />
 
       {/* Top bar with admin + logout */}
-      <div className="relative max-w-5xl mx-auto px-6 pt-6 flex items-center justify-end gap-2">
+      <div className="relative max-w-5xl mx-auto px-6 pt-6 flex items-center justify-end gap-2 lg:hidden">
         {isAdmin && (
           <button
             onClick={() => navigate('/admin')}
@@ -136,8 +133,8 @@ export default function Landing() {
       <div className="relative max-w-5xl mx-auto px-6 pb-16 pt-8 sm:pt-10">
         {/* Hero */}
         <header className="flex flex-col items-center text-center">
-          <div className="bg-card rounded-2xl shadow-sm ring-1 ring-border px-8 py-6">
-            <img src={logo} alt="3 Phase Conveyor" className="h-16 w-auto" />
+          <div className="max-w-full px-2 py-2">
+            <img src={logo} alt="3 Phase Conveyor" className="h-12 sm:h-16 w-auto max-w-full" />
           </div>
           <h1 className="mt-8 text-3xl sm:text-4xl font-bold tracking-tight">
             3 Phase Conveyor
@@ -146,9 +143,7 @@ export default function Landing() {
             Electrical &amp; Mechanical — applications
           </p>
           <div className="mt-6 flex items-center gap-1">
-            <span className="w-2.5 h-7 rounded-full bg-destructive" />
-            <span className="w-2.5 h-7 rounded-full bg-primary" />
-            <span className="w-2.5 h-7 rounded-full bg-accent" />
+            <span className="w-28 h-1 rounded-full gold-sheen" />
           </div>
         </header>
 
@@ -168,9 +163,9 @@ export default function Landing() {
                   onClick={() => accessible && navigate(app.path)}
                   disabled={!accessible}
                   className={[
-                    'group text-left rounded-xl border bg-card p-6 transition-all duration-300',
+                    'group text-left rounded-lg border bg-card p-6 animate-rise',
                     accessible
-                      ? 'hover:shadow-lg hover:border-primary/40 cursor-pointer'
+                      ? 'hover-lift cursor-pointer'
                       : 'opacity-70 cursor-default',
                   ].join(' ')}
                 >
@@ -178,7 +173,7 @@ export default function Landing() {
                     className={[
                       'h-1 w-12 rounded-full mb-5',
                       accessible
-                        ? 'bg-gradient-to-r from-destructive via-primary to-accent'
+                        ? 'gold-sheen'
                         : 'bg-muted-foreground/30',
                     ].join(' ')}
                   />

@@ -1,119 +1,96 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Black & gold control-room theme. One palette for every device: the app is
+   always dark, with gold for primary actions and white text. Every shadcn/ui
+   component reads these tokens, so changing them restyles the whole app. */
 @layer base {
   :root {
-    --font-inter: 'Inter', sans-serif;
+    color-scheme: dark;
+    /* --font-inter is the body font the existing `font-inter` class uses. */
+    --font-inter: 'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+    --font-display: 'Archivo', 'Arial Narrow', Arial, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
 
-    --background: 220 20% 97%;
-    --foreground: 0 0% 17%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 17%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 17%;
-    --primary: 208 75% 42%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 94%;
-    --secondary-foreground: 0 0% 17%;
-    --muted: 220 14% 94%;
-    --muted-foreground: 0 0% 45%;
-    --accent: 130 55% 46%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 4 82% 49%;
+    --background: 240 5% 4%;          /* #0A0A0B */
+    --foreground: 0 0% 100%;
+    --card: 240 5% 8%;                /* #141416 */
+    --card-foreground: 0 0% 100%;
+    --popover: 240 5% 9%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 44 66% 50%;            /* gold #D4A72C */
+    --primary-foreground: 240 5% 4%;
+    --secondary: 240 5% 12%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 240 5% 12%;
+    --muted-foreground: 240 4% 68%;   /* #A9A9B0 */
+    --accent: 43 74% 66%;             /* bright gold #E8C36B */
+    --accent-foreground: 240 5% 4%;
+    --destructive: 3 75% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 89%;
-    --input: 220 13% 89%;
-    --ring: 208 75% 42%;
-    --chart-1: 4 82% 49%;
-    --chart-2: 208 75% 42%;
-    --chart-3: 130 55% 46%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --radius: 0.625rem;
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 0 0% 17%;
-    --sidebar-primary: 208 75% 42%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 14% 94%;
-    --sidebar-accent-foreground: 0 0% 17%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 208 75% 42%;
+    --border: 240 5% 17%;             /* #2A2A2E */
+    --input: 240 5% 20%;
+    --ring: 44 66% 50%;
+    --chart-1: 44 66% 50%;            /* gold: Electrical */
+    --chart-2: 240 6% 88%;            /* silver: Mechanical */
+    --chart-3: 140 45% 55%;
+    --chart-4: 213 40% 60%;
+    --chart-5: 3 75% 62%;
+    --radius: 0.5rem;
+    --sidebar-background: 240 6% 6%;  /* #0F0F11 */
+    --sidebar-foreground: 240 5% 75%;
+    --sidebar-primary: 44 66% 50%;
+    --sidebar-primary-foreground: 240 5% 4%;
+    --sidebar-accent: 42 33% 9%;      /* #1E1A10 */
+    --sidebar-accent-foreground: 43 82% 68%;
+    --sidebar-border: 240 5% 15%;
+    --sidebar-ring: 44 66% 50%;
   }
+}
 
-  /* Auto dark mode from system preference */
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --background: 220 15% 8%;
-      --foreground: 0 0% 95%;
-      --card: 220 15% 12%;
-      --card-foreground: 0 0% 95%;
-      --popover: 220 15% 12%;
-      --popover-foreground: 0 0% 95%;
-      --primary: 208 75% 50%;
-      --primary-foreground: 0 0% 100%;
-      --secondary: 220 15% 18%;
-      --secondary-foreground: 0 0% 95%;
-      --muted: 220 15% 18%;
-      --muted-foreground: 0 0% 60%;
-      --accent: 130 55% 46%;
-      --accent-foreground: 0 0% 100%;
-      --destructive: 4 82% 49%;
-      --destructive-foreground: 0 0% 100%;
-      --border: 220 15% 20%;
-      --input: 220 15% 20%;
-      --ring: 208 75% 50%;
-      --chart-1: 4 82% 55%;
-      --chart-2: 208 75% 55%;
-      --chart-3: 130 55% 50%;
-      --chart-4: 43 74% 66%;
-      --chart-5: 27 87% 67%;
-      --sidebar-background: 220 15% 10%;
-      --sidebar-foreground: 0 0% 95%;
-      --sidebar-primary: 208 75% 50%;
-      --sidebar-primary-foreground: 0 0% 100%;
-      --sidebar-accent: 220 15% 16%;
-      --sidebar-accent-foreground: 0 0% 95%;
-      --sidebar-border: 220 15% 18%;
-      --sidebar-ring: 208 75% 50%;
-    }
+/* ---- Micro-animations ---------------------------------------------------- */
+@keyframes tp-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes tp-sheen { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+@keyframes tp-pulse {
+  0% { box-shadow: 0 0 0 0 hsl(44 66% 50% / .55); }
+  70% { box-shadow: 0 0 0 8px hsl(44 66% 50% / 0); }
+  100% { box-shadow: 0 0 0 0 hsl(44 66% 50% / 0); }
+}
+@keyframes tp-grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+@layer utilities {
+  /* Panels and cards ease up into place when they first appear. */
+  .animate-rise { animation: tp-rise .45s cubic-bezier(.2,.7,.2,1) both; }
+  .animate-rise:nth-child(2) { animation-delay: .04s; }
+  .animate-rise:nth-child(3) { animation-delay: .08s; }
+  .animate-rise:nth-child(4) { animation-delay: .12s; }
+  .animate-rise:nth-child(5) { animation-delay: .16s; }
+  .animate-rise:nth-child(6) { animation-delay: .2s; }
+  .animate-rise:nth-child(n+7) { animation-delay: .24s; }
+  /* Clickable cards lift with a gold edge on hover. */
+  .hover-lift { transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
+  .hover-lift:hover { transform: translateY(-2px); border-color: hsl(var(--primary)); }
+  /* Slow gold shimmer for the rule under the logo. */
+  .gold-sheen {
+    background: linear-gradient(90deg, #8A6A16, #D4A72C, #F2CC6B, #D4A72C, #8A6A16);
+    background-size: 200% 100%;
+    animation: tp-sheen 6s linear infinite;
   }
+  .pulse-gold { animation: tp-pulse 2s ease-out infinite; }
+  .grow-x { transform-origin: left; animation: tp-grow-x .9s cubic-bezier(.2,.7,.2,1) .15s both; }
+  .font-display { font-family: var(--font-display); }
+  .font-mono-ui { font-family: var(--font-mono); }
+}
 
-  .dark {
-    --background: 220 15% 8%;
-    --foreground: 0 0% 95%;
-    --card: 220 15% 12%;
-    --card-foreground: 0 0% 95%;
-    --popover: 220 15% 12%;
-    --popover-foreground: 0 0% 95%;
-    --primary: 208 75% 50%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 15% 18%;
-    --secondary-foreground: 0 0% 95%;
-    --muted: 220 15% 18%;
-    --muted-foreground: 0 0% 60%;
-    --accent: 130 55% 46%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 4 82% 49%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 220 15% 20%;
-    --input: 220 15% 20%;
-    --ring: 208 75% 50%;
-    --chart-1: 4 82% 55%;
-    --chart-2: 208 75% 55%;
-    --chart-3: 130 55% 50%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --sidebar-background: 220 15% 10%;
-    --sidebar-foreground: 0 0% 95%;
-    --sidebar-primary: 208 75% 50%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 15% 16%;
-    --sidebar-accent-foreground: 0 0% 95%;
-    --sidebar-border: 220 15% 18%;
-    --sidebar-ring: 208 75% 50%;
+/* Everyone who asks their device for less motion gets none. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
   }
 }
 
@@ -130,6 +107,12 @@
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
   }
+
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.005em;
+  }
+  ::selection { background: hsl(var(--primary) / .35); }
 
   /* Disable text selection on interactive UI elements */
   button, a, nav, [role="tab"], [role="button"] {

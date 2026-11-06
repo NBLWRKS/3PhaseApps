@@ -13,9 +13,9 @@ export default function ReportCard({ report }) {
 
   return (
     <Link to={`/reports/${report.id}`}>
-      <Card className="group hover:shadow-lg hover:border-primary/30 transition-all duration-300 overflow-hidden cursor-pointer">
+      <Card className="group hover-lift overflow-hidden cursor-pointer">
         {/* Accent strip */}
-        <div className="h-1 bg-gradient-to-r from-destructive via-primary to-accent" />
+        <div className="h-1 gold-sheen" />
         <CardContent className="p-5">
           <div className="flex items-start justify-between mb-3">
             <h3 className="font-semibold text-foreground text-base leading-tight line-clamp-2 group-hover:text-primary transition-colors">

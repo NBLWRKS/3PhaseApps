@@ -173,7 +173,7 @@ export default function ReportEditor() {
 
       {/* Project info */}
       <Card>
-        <div className="h-1 bg-gradient-to-r from-destructive via-primary to-accent" />
+        <div className="h-1 gold-sheen" />
         <CardContent className="p-6 space-y-4">
           <h2 className="text-lg font-semibold">Report Details</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

@@ -6,7 +6,7 @@ import { canRead, canEdit } from '@/lib/permissions';
 import { Navigate } from 'react-router-dom';
 import { Search, Plus, ShieldCheck, ChevronRight, Loader2, Tag, IdCard, CheckSquare, Square, X, GraduationCap, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import logo from '@/assets/logo.jpg';
+import logo from '@/assets/logo-dark.png';
 import AppSwitcher from '@/components/layout/AppSwitcher';
 import { downloadCardsPdf } from '@/lib/idCardGenerator';
 
@@ -133,8 +133,8 @@ export default function SafetyList() {
       <header className="sticky top-0 z-40 bg-card border-b border-border">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src={logo} alt="3 Phase Conveyor" className="h-7 w-auto" />
-            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2">
+            <img src={logo} alt="3 Phase Conveyor" className="h-5 sm:h-6 w-auto shrink-0 lg:hidden" />
+            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2 lg:border-l-0 lg:pl-0 lg:font-display lg:text-lg lg:text-foreground">
               Safety Credentials
             </span>
           </div>
@@ -254,7 +254,7 @@ export default function SafetyList() {
                               onClick={() => toggleCheck(e.id, c.id)}
                               disabled={!canEditOnboarding}
                               title={done ? `Completed${rec.completed_date ? ` ${rec.completed_date.slice(0, 10)}` : ''}${rec.score != null ? ` · quiz ${rec.score}%` : ''}${rec.lang ? ` · ${rec.lang === 'es' ? 'Spanish' : 'English'}` : ''}${canEditOnboarding ? ' — click to clear' : ''}` : 'Not completed — click to mark complete'}
-                              className={`inline-flex items-center justify-center w-6 h-6 rounded-md border transition ${done ? 'bg-green-500/15 border-green-500/40 text-green-600' : 'border-border text-transparent hover:border-primary/50'} ${canEditOnboarding ? 'cursor-pointer' : 'cursor-default'}`}
+                              className={`inline-flex items-center justify-center w-6 h-6 rounded-md border transition ${done ? 'bg-green-500/15 border-green-500/40 text-emerald-400' : 'border-border text-transparent hover:border-primary/50'} ${canEditOnboarding ? 'cursor-pointer' : 'cursor-default'}`}
                             >
                               <Check className="w-4 h-4" />
                             </button>

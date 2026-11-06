@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { canRead, canEdit } from '@/lib/permissions';
 import { Loader2, Upload, Trash2, Pencil, FileText, GraduationCap, ExternalLink, Presentation, EyeOff, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
-import logo from '@/assets/logo.jpg';
+import logo from '@/assets/logo-dark.png';
 import AppSwitcher from '@/components/layout/AppSwitcher';
 
 export default function OnboardingAdmin() {
@@ -65,8 +65,8 @@ export default function OnboardingAdmin() {
       <header className="sticky top-0 z-40 bg-card/80 backdrop-blur border-b border-border">
         <div className="max-w-4xl mx-auto px-5 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src={logo} alt="3 Phase Conveyor" className="h-7 w-auto" />
-            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2.5">Onboarding</span>
+            <img src={logo} alt="3 Phase Conveyor" className="h-5 sm:h-6 w-auto shrink-0 lg:hidden" />
+            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2.5 lg:border-l-0 lg:pl-0 lg:font-display lg:text-lg lg:text-foreground">Onboarding</span>
           </div>
           <AppSwitcher />
         </div>

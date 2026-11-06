@@ -4,7 +4,7 @@ import { AnimatePresence } from 'framer-motion';
 import { LayoutDashboard, FilePlus, LogOut, Shield } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
-import logo from '@/assets/logo.jpg';
+import logo from '@/assets/logo-dark.png';
 import BottomTabBar from './BottomTabBar';
 import PageTransition from './PageTransition';
 import AppSwitcher from './AppSwitcher';
@@ -29,8 +29,8 @@ export default function AppLayout() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Logo */}
           <Link to="/reports" className="flex items-center gap-3">
-            <img src={logo} alt="3 Phase Conveyor" className="h-8 w-auto" />
-            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-3">
+            <img src={logo} alt="3 Phase Conveyor" className="h-5 sm:h-6 w-auto shrink-0 lg:hidden" />
+            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-3 lg:border-l-0 lg:pl-0 lg:font-display lg:text-lg lg:text-foreground">
               Reports
             </span>
           </Link>
@@ -81,8 +81,8 @@ export default function AppLayout() {
         style={{ paddingTop: 'env(safe-area-inset-top)' }}
       >
         <Link to="/reports" className="flex items-center gap-2">
-          <img src={logo} alt="3 Phase Conveyor" className="h-7 w-auto" />
-          <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2">
+          <img src={logo} alt="3 Phase Conveyor" className="h-5 sm:h-6 w-auto shrink-0 lg:hidden" />
+          <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2 lg:border-l-0 lg:pl-0 lg:font-display lg:text-lg lg:text-foreground">
             Reports
           </span>
         </Link>

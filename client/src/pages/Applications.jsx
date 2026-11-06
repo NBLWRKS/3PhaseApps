@@ -4,7 +4,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { canRead } from '@/lib/permissions';
 import { Loader2, FileText, Download, Trash2, ShieldAlert, FolderOpen } from 'lucide-react';
 import { toast } from 'sonner';
-import logo from '@/assets/logo.jpg';
+import logo from '@/assets/logo-dark.png';
 import AppSwitcher from '@/components/layout/AppSwitcher';
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
@@ -62,8 +62,8 @@ export default function Applications() {
       <header className="sticky top-0 z-40 bg-card/80 backdrop-blur border-b border-border">
         <div className="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <img src={logo} alt="3 Phase Conveyor" className="h-7 w-auto" />
-            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2.5">Applications</span>
+            <img src={logo} alt="3 Phase Conveyor" className="h-5 sm:h-6 w-auto shrink-0 lg:hidden" />
+            <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2.5 lg:border-l-0 lg:pl-0 lg:font-display lg:text-lg lg:text-foreground">Applications</span>
           </div>
           <AppSwitcher />
         </div>

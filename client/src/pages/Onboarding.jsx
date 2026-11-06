@@ -4,7 +4,7 @@ import {
   CheckCircle2, Circle, Loader2, FileText, ChevronLeft, ChevronRight, ShieldCheck, GraduationCap,
   Languages, ClipboardCheck, XCircle, RotateCcw, Info, Presentation,
 } from 'lucide-react';
-import logo from '@/assets/logo.jpg';
+import logo from '@/assets/logo-dark.png';
 
 // ---------------------------------------------------------------------------
 // UI strings (English / Spanish)
@@ -134,7 +134,7 @@ function Shell({ lang, setLang, children, wide }) {
       <header className="bg-card border-b border-border">
         <div className={`${wide ? 'max-w-5xl' : 'max-w-3xl'} mx-auto px-4 h-14 flex items-center justify-between gap-2.5`}>
           <div className="flex items-center gap-2.5 min-w-0">
-            <img src={logo} alt="3 Phase Conveyor" className="h-7 w-auto" />
+            <img src={logo} alt="3 Phase Conveyor" className="h-5 sm:h-6 w-auto shrink-0" />
             <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2.5 truncate">{T[lang].onboarding}</span>
           </div>
           <LangToggle lang={lang} setLang={setLang} />
@@ -265,7 +265,7 @@ function Quiz({ course, lang, t, employeeId, onPassed, onReviewSlides }) {
       {result && (
         <div className={`rounded-xl border p-4 mb-5 ${result.passed ? 'border-green-500/40 bg-green-500/10' : 'border-amber-500/40 bg-amber-500/10'}`}>
           <div className="flex items-center gap-2 font-semibold">
-            {result.passed ? <CheckCircle2 className="w-5 h-5 text-green-600" /> : <XCircle className="w-5 h-5 text-amber-600" />}
+            {result.passed ? <CheckCircle2 className="w-5 h-5 text-emerald-400" /> : <XCircle className="w-5 h-5 text-amber-400" />}
             {result.passed ? t.passed : t.failed}
           </div>
           <p className="text-sm mt-1">{t.yourScore(result.correct, result.total, result.score)}</p>
@@ -291,8 +291,8 @@ function Quiz({ course, lang, t, employeeId, onPassed, onReviewSlides }) {
               <div className="text-xs text-muted-foreground mb-1 flex items-center gap-1.5">
                 {t.question(qi + 1, quiz.questions.length)}
                 {result && (result.results[qi]
-                  ? <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />
-                  : <XCircle className="w-3.5 h-3.5 text-amber-600" />)}
+                  ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  : <XCircle className="w-3.5 h-3.5 text-amber-400" />)}
               </div>
               <div className="font-medium mb-3">{q.q}</div>
               <div className="space-y-2">
@@ -457,7 +457,7 @@ export default function Onboarding() {
 
         {step === 'done' && (
           <div className="rounded-xl border border-green-500/40 bg-green-500/10 p-6 text-center">
-            <CheckCircle2 className="w-10 h-10 text-green-600 mx-auto mb-2" />
+            <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto mb-2" />
             <div className="font-semibold text-lg">{t.courseDone}</div>
             <p className="text-sm text-muted-foreground mt-1">{t.courseDoneMsg}</p>
             <button onClick={closeCourse} className="mt-4 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-semibold">{t.done}</button>
@@ -503,7 +503,7 @@ export default function Onboarding() {
               : null;
             return (
               <div key={c.id} className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">
-                {done ? <CheckCircle2 className="w-5 h-5 text-green-600 flex-none" /> : <Circle className="w-5 h-5 text-muted-foreground flex-none" />}
+                {done ? <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-none" /> : <Circle className="w-5 h-5 text-muted-foreground flex-none" />}
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold">{courseName(c)}</div>
                   <div className="text-xs text-muted-foreground">

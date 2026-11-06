@@ -6,9 +6,9 @@ import {
 
 const STATUS_COLORS = {
   not_started: '#9aa3af',
-  in_progress: '#2C6E9B',
-  complete: '#2E7D5B',
-  blocked: '#C0392B',
+  in_progress: '#6E9BC8',
+  complete: '#4CB37F',
+  blocked: '#E5534B',
 };
 const STATUS_LABELS = {
   not_started: 'Not started',
@@ -18,10 +18,10 @@ const STATUS_LABELS = {
 };
 
 function pctColor(p) {
-  if (p >= 100) return '#2E7D5B';
-  if (p >= 50) return '#2C6E9B';
+  if (p >= 100) return '#4CB37F';
+  if (p >= 50) return '#6E9BC8';
   if (p > 0) return '#E8B33D';
-  return '#cbd5e1';
+  return '#55555C';
 }
 
 export default function TrackingDashboard({ summary }) {
@@ -75,7 +75,7 @@ export default function TrackingDashboard({ summary }) {
         <StatCard label="Overall completion" value={`${overall}%`} accent={pctColor(overall)} />
         <StatCard label="Projects" value={summary.length} />
         <StatCard label="Total tasks" value={totalTasks} />
-        <StatCard label="Blocked" value={totalBlocked} accent={totalBlocked > 0 ? '#C0392B' : undefined} />
+        <StatCard label="Blocked" value={totalBlocked} accent={totalBlocked > 0 ? '#E5534B' : undefined} />
       </div>
 
       {/* Project filter */}

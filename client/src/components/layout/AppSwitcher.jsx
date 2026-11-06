@@ -39,7 +39,7 @@ export default function AppSwitcher({ currentKey }) {
   if (others.length === 0) return null;
 
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative lg:hidden" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"

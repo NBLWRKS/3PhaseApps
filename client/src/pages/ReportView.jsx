@@ -254,7 +254,7 @@ export default function ReportView() {
 
       {/* Report header */}
       <Card lang="es">
-        <div className="h-1 bg-gradient-to-r from-destructive via-primary to-accent" />
+        <div className="h-1 gold-sheen" />
         <CardContent className="p-6">
           <div className="flex items-start justify-between mb-4">
             <h1 className="text-2xl font-bold text-foreground">{report.project || 'Untitled Report'}</h1>
