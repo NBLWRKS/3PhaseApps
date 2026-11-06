@@ -25,8 +25,12 @@ export function getUserFromToken(token) {
   if (!token) return null;
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare('SELECT id, email, full_name, role, app_permissions, created_date, updated_date FROM users WHERE id = ?').get(payload.sub);
+    const user = db.prepare('SELECT id, email, full_name, role, app_permissions, created_date, updated_date, password_changed_at FROM users WHERE id = ?').get(payload.sub);
     if (!user) return null;
+    // An admin password reset signs the person out everywhere: reject tokens
+    // issued (iat, in seconds) before the second the password was changed.
+    if (user.password_changed_at && payload.iat < Math.floor(user.password_changed_at / 1000)) return null;
+    delete user.password_changed_at;
     try {
       user.app_permissions = normalizePermissions(JSON.parse(user.app_permissions || '{}'));
     } catch {

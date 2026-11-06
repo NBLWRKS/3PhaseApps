@@ -292,6 +292,7 @@ function ensureColumn(table, column, definition) {
 ensureColumn('reports', 'report_type', "TEXT NOT NULL DEFAULT 'electrical'");
 ensureColumn('reports', 'beds_installed', 'INTEGER');
 ensureColumn('users', 'app_permissions', `TEXT NOT NULL DEFAULT '["reports"]'`);
+ensureColumn('users', 'password_changed_at', 'INTEGER'); // ms epoch; sign-ins issued earlier are rejected
 ensureColumn('highlights', 'updated_by', 'TEXT');
 ensureColumn('highlights', 'pages', "TEXT NOT NULL DEFAULT '[]'");
 ensureColumn('highlights', 'project', 'TEXT');

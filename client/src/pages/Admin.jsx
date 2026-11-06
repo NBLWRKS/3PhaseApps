@@ -9,7 +9,17 @@ import { Switch } from '@/components/ui/switch';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, Loader2, ShieldCheck, Check, UserX } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ArrowLeft, Loader2, ShieldCheck, Check, UserX, KeyRound, Copy } from 'lucide-react';
+
+// Readable temporary password: no 0/O/1/l/I look-alikes, 12 characters.
+function generatePassword() {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  const buf = new Uint32Array(12);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, (n) => chars[n % chars.length]).join('');
+}
 import { toast } from 'sonner';
 
 export default function Admin() {
@@ -21,6 +31,12 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
   const [error, setError] = useState('');
+  // Password reset panel: which user it's open for, the typed value, and the
+  // password just set (shown once so the admin can pass it on).
+  const [pwFor, setPwFor] = useState(null);
+  const [pwValue, setPwValue] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [pwDone, setPwDone] = useState(null); // { id, password }
 
   const isAdmin = user?.role === 'admin';
 
@@ -92,6 +108,48 @@ export default function Admin() {
 
   const changeRole = (u, role) => {
     saveUser(u.id, { role });
+  };
+
+  const openPasswordReset = (u) => {
+    setPwFor(u.id);
+    setPwValue(generatePassword());
+    setPwError('');
+    setPwDone(null);
+  };
+
+  const closePasswordReset = () => {
+    setPwFor(null);
+    setPwValue('');
+    setPwError('');
+    setPwDone(null);
+  };
+
+  const submitPasswordReset = async (e, u) => {
+    e.preventDefault();
+    if (pwValue.length < 8) {
+      setPwError('Use at least 8 characters.');
+      return;
+    }
+    setSavingId(u.id);
+    setPwError('');
+    try {
+      await base44.admin.setUserPassword(u.id, pwValue);
+      setPwDone({ id: u.id, password: pwValue });
+      toast.success('Password reset');
+    } catch (err) {
+      setPwError(err.message || 'Failed to reset password');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const copyPassword = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Copied');
+    } catch {
+      /* clipboard blocked: the password is selectable on screen */
+    }
   };
 
   // Remove an account (e.g. someone who left). Their sign-in stops working
@@ -187,20 +245,90 @@ export default function Admin() {
                         </Select>
                       </div>
 
-                      {/* Remove account (not available on your own row) */}
+                      {/* Reset password / remove account (not on your own row) */}
                       {!isSelf && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeUser(u)}
-                          disabled={savingId === u.id}
-                          className="gap-2 text-destructive hover:text-destructive self-start sm:self-auto"
-                        >
-                          <UserX className="w-4 h-4" aria-hidden="true" />
-                          Remove
-                        </Button>
+                        <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => (pwFor === u.id ? closePasswordReset() : openPasswordReset(u))}
+                            disabled={savingId === u.id}
+                            aria-expanded={pwFor === u.id}
+                            aria-controls={`pw-${u.id}`}
+                            className="gap-2"
+                          >
+                            <KeyRound className="w-4 h-4" aria-hidden="true" />
+                            Reset password
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => removeUser(u)}
+                            disabled={savingId === u.id}
+                            className="gap-2 text-destructive hover:text-destructive"
+                          >
+                            <UserX className="w-4 h-4" aria-hidden="true" />
+                            Remove
+                          </Button>
+                        </div>
                       )}
                     </div>
+
+                    {/* Password reset panel */}
+                    {pwFor === u.id && (
+                      <div id={`pw-${u.id}`} className="mt-4 p-4 rounded-lg border border-border bg-muted/40">
+                        {pwDone?.id === u.id ? (
+                          <div className="space-y-3" role="status">
+                            <p className="text-sm font-medium">
+                              Password reset for {u.full_name || u.email}. They've been signed out on every device.
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              Give them this password privately. It won't be shown again.
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <code className="px-3 py-2 rounded-md bg-background border border-border font-mono text-base select-all break-all">
+                                {pwDone.password}
+                              </code>
+                              <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => copyPassword(pwDone.password)}>
+                                <Copy className="w-4 h-4" aria-hidden="true" />
+                                Copy
+                              </Button>
+                              <Button type="button" size="sm" onClick={closePasswordReset}>Done</Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <form onSubmit={(e) => submitPasswordReset(e, u)} className="space-y-3">
+                            <Label htmlFor={`pw-input-${u.id}`}>New password for {u.full_name || u.email}</Label>
+                            <div className="flex flex-wrap gap-2">
+                              <Input
+                                id={`pw-input-${u.id}`}
+                                type="text"
+                                autoComplete="new-password"
+                                spellCheck={false}
+                                value={pwValue}
+                                onChange={(e) => { setPwValue(e.target.value); setPwError(''); }}
+                                aria-invalid={!!pwError}
+                                aria-describedby={`pw-help-${u.id}`}
+                                className="font-mono flex-1 min-w-0 basis-56"
+                              />
+                              <Button type="button" variant="outline" onClick={() => { setPwValue(generatePassword()); setPwError(''); }}>
+                                Generate new
+                              </Button>
+                            </div>
+                            <p id={`pw-help-${u.id}`} className={`text-xs ${pwError ? 'text-destructive' : 'text-muted-foreground'}`}>
+                              {pwError || 'At least 8 characters. Saving signs them out everywhere.'}
+                            </p>
+                            <div className="flex gap-2">
+                              <Button type="submit" size="sm" disabled={savingId === u.id}>
+                                {savingId === u.id && <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />}
+                                Set password
+                              </Button>
+                              <Button type="button" variant="ghost" size="sm" onClick={closePasswordReset}>Cancel</Button>
+                            </div>
+                          </form>
+                        )}
+                      </div>
+                    )}
 
                     {/* App permissions */}
                     <div className="mt-4 pt-4 border-t border-border">

@@ -1,6 +1,6 @@
 import express from 'express';
 import db from './db.js';
-import { authRequired, adminRequired } from './auth.js';
+import { authRequired, adminRequired, hashPassword } from './auth.js';
 import { APPS, sanitizePermissions, normalizePermissions } from './apps.js';
 
 const router = express.Router();
@@ -67,6 +67,27 @@ router.delete('/users/:id', (req, res) => {
     db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(target.id);
     db.prepare('DELETE FROM otps WHERE email = ?').run(target.email);
     db.prepare('DELETE FROM users WHERE id = ?').run(target.id);
+  })();
+  res.json({ ok: true });
+});
+
+// POST /api/admin/users/:id/password  { password }
+// Set a new password for someone (e.g. they forgot theirs). Signs them out
+// everywhere: sign-ins issued before now stop working (see getUserFromToken).
+router.post('/users/:id/password', (req, res) => {
+  const target = db.prepare('SELECT id, email FROM users WHERE id = ?').get(req.params.id);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  if (target.id === req.user.id) {
+    return res.status(400).json({ error: "You can't reset your own password here." });
+  }
+  const password = typeof req.body?.password === 'string' ? req.body.password : '';
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  if (password.length > 200) return res.status(400).json({ error: 'Password is too long (200 characters max).' });
+  const ts = now();
+  db.transaction(() => {
+    db.prepare('UPDATE users SET password_hash = ?, password_changed_at = ?, updated_date = ? WHERE id = ?')
+      .run(hashPassword(password), Date.now(), ts, target.id);
+    db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(target.id);
   })();
   res.json({ ok: true });
 });
