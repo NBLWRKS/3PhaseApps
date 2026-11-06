@@ -53,4 +53,22 @@ router.put('/users/:id', (req, res) => {
   res.json(updated);
 });
 
+// DELETE /api/admin/users/:id -> remove an account (e.g. someone who left the
+// company). Their sign-ins stop working immediately, because every request
+// looks the user up by id. Records they created (reports, expenses, training)
+// are kept; those store the creator's email, not a link to this row.
+router.delete('/users/:id', (req, res) => {
+  const target = db.prepare('SELECT id, email FROM users WHERE id = ?').get(req.params.id);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  if (target.id === req.user.id) {
+    return res.status(400).json({ error: "You can't remove your own account." });
+  }
+  db.transaction(() => {
+    db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(target.id);
+    db.prepare('DELETE FROM otps WHERE email = ?').run(target.email);
+    db.prepare('DELETE FROM users WHERE id = ?').run(target.id);
+  })();
+  res.json({ ok: true });
+});
+
 export default router;

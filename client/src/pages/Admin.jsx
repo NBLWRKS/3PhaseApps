@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft, Loader2, ShieldCheck, Check } from 'lucide-react';
+import { ArrowLeft, Loader2, ShieldCheck, Check, UserX } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Admin() {
@@ -94,6 +94,25 @@ export default function Admin() {
     saveUser(u.id, { role });
   };
 
+  // Remove an account (e.g. someone who left). Their sign-in stops working
+  // right away; reports and records they created are kept.
+  const removeUser = async (u) => {
+    const who = u.full_name ? `${u.full_name} (${u.email})` : u.email;
+    if (!confirm(`Remove ${who}?\n\nThey will be signed out and can no longer log in. Reports and records they created are kept.`)) return;
+    setSavingId(u.id);
+    setError('');
+    try {
+      await base44.admin.deleteUser(u.id);
+      setUsers((cur) => cur.filter((x) => x.id !== u.id));
+      toast.success('User removed');
+    } catch (err) {
+      setError(err.message || 'Failed to remove user');
+      toast.error(err.message || 'Failed to remove user');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-40 bg-card border-b border-border">
@@ -167,6 +186,20 @@ export default function Admin() {
                           </SelectContent>
                         </Select>
                       </div>
+
+                      {/* Remove account (not available on your own row) */}
+                      {!isSelf && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeUser(u)}
+                          disabled={savingId === u.id}
+                          className="gap-2 text-destructive hover:text-destructive self-start sm:self-auto"
+                        >
+                          <UserX className="w-4 h-4" aria-hidden="true" />
+                          Remove
+                        </Button>
+                      )}
                     </div>
 
                     {/* App permissions */}

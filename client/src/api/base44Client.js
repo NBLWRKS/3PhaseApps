@@ -125,6 +125,7 @@ const admin = {
   listUsers: () => request('GET', '/admin/users'),
   updateUser: (id, { role, app_permissions }) =>
     request('PUT', `/admin/users/${id}`, { body: { role, app_permissions } }),
+  deleteUser: (id) => request('DELETE', `/admin/users/${id}`),
 };
 
 // Highlight app: convert PDFs to PNG and manage highlighted conveyor docs.
