@@ -23,7 +23,7 @@ services:
       sizeGB: 1               # uploaded photos survive deploys/restarts.
     envVars:
       - key: NODE_VERSION
-        value: "20"
+        value: "22"
       - key: PORT
         value: "8080"
       - key: DATA_DIR
