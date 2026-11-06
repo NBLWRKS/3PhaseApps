@@ -1,6 +1,6 @@
 // Drop-in replacement for the Base44 SDK client.
 // Exposes the same surface the app uses:
-//   base44.auth.{me,loginViaEmailPassword,loginWithProvider,register,verifyOtp,
+//   base44.auth.{me,loginViaEmailPassword,register,verifyOtp,
 //               resendOtp,setToken,logout,redirectToLogin,
 //               resetPasswordRequest,resetPassword}
 //   base44.entities.Report.{list,filter,get,create,update,delete}
@@ -70,10 +70,6 @@ const auth = {
     const r = await request('POST', '/auth/login', { body: { email, password } });
     if (r?.access_token) setToken(r.access_token);
     return r;
-  },
-
-  loginWithProvider: (_provider, _next) => {
-    window.location.href = '/login';
   },
 
   register: ({ email, password }) =>
