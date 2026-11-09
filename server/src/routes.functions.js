@@ -35,8 +35,27 @@ async function loadImageBuffer(url) {
   }
 }
 
+// Express 4 doesn't catch errors thrown inside async handlers. On Node 15+ such
+// an error is an unhandled promise rejection, which stops the whole server, so
+// every async route here goes through this wrapper and answers with a 500.
+const safeAsync = (label, fn) => (req, res, next) =>
+  Promise.resolve(fn(req, res, next)).catch((err) => {
+    console.error(`[${label}] failed:`, err && err.stack ? err.stack : err);
+    if (!res.headersSent) res.status(500).json({ error: `${label} failed` });
+  });
+
+// Photos may be plain URL strings (legacy) or { url, caption } objects. Anything
+// else (null, numbers, bad objects) is skipped rather than crashing the export.
+function photoOf(item) {
+  if (typeof item === 'string') return item ? { url: item, caption: '' } : null;
+  if (item && typeof item === 'object' && typeof item.url === 'string' && item.url) {
+    return { url: item.url, caption: typeof item.caption === 'string' ? item.caption : '' };
+  }
+  return null;
+}
+
 // POST /api/functions/generatePdf  { reportId }  -> { data: { file_url } }
-router.post('/generatePdf', authRequired, async (req, res) => {
+router.post('/generatePdf', authRequired, safeAsync('PDF export', async (req, res) => {
   const { reportId } = req.body || {};
   const report = getReport(reportId);
   if (!report) return res.status(404).json({ error: 'Report not found' });
@@ -85,22 +104,25 @@ router.post('/generatePdf', authRequired, async (req, res) => {
   doc.moveTo(margin, doc.y).lineTo(pageW - margin, doc.y).strokeColor('#e2e8f0').stroke();
   doc.moveDown(0.8);
 
-  for (let i = 0; i < (report.blocks || []).length; i++) {
-    const block = report.blocks[i];
+  const blocks = Array.isArray(report.blocks)
+    ? report.blocks.filter((b) => b && typeof b === 'object')
+    : [];
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
     if (doc.y > doc.page.height - 120) doc.addPage();
 
     doc.fillColor('#1b75bc').fontSize(14).font('Helvetica-Bold')
       .text(`${i + 1}. ${block.title || 'Section'}`, margin, doc.y);
     doc.moveDown(0.3);
     if (block.description) {
-      doc.fillColor('#2b2b2b').fontSize(11).font('Helvetica').text(block.description, { width: contentW });
+      doc.fillColor('#2b2b2b').fontSize(11).font('Helvetica').text(String(block.description), { width: contentW });
       doc.moveDown(0.4);
     }
 
-    for (const imgItem of block.images || []) {
-      // Photos may be plain URL strings (legacy) or { url, caption } objects.
-      const imgUrl = typeof imgItem === 'string' ? imgItem : imgItem.url;
-      const caption = typeof imgItem === 'string' ? '' : (imgItem.caption || '');
+    for (const imgItem of Array.isArray(block.images) ? block.images : []) {
+      const photo = photoOf(imgItem);
+      if (!photo) continue;
+      const { url: imgUrl, caption } = photo;
       const buf = await loadImageBuffer(imgUrl);
       if (!buf) continue;
       const maxH = 280;
@@ -139,8 +161,8 @@ router.post('/generatePdf', authRequired, async (req, res) => {
   stream.on('finish', () => {
     res.json({ data: { file_url: `${publicBase()}/uploads/${filename}` } });
   });
-  stream.on('error', (err) => res.status(500).json({ error: err.message }));
-});
+  stream.on('error', (err) => { if (!res.headersSent) res.status(500).json({ error: err.message }); });
+}));
 
 // POST /api/functions/translateReport  { reportId }  (admin only)
 router.post('/translateReport', authRequired, adminRequired, async (req, res) => {

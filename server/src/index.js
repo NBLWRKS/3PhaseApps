@@ -79,6 +79,13 @@ if (fs.existsSync(clientDir)) {
   });
 }
 
+// Last-resort safety net: an async route that forgets to catch an error would
+// otherwise stop the whole server (Node's default for unhandled rejections),
+// taking every app down for everyone until Render restarts it. Log it instead.
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', err && err.stack ? err.stack : err);
+});
+
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`PhaseMaster server listening on :${PORT}`);
