@@ -14,7 +14,12 @@ import AppSwitcher from '@/components/layout/AppSwitcher';
 import ExpenseDashboard from '@/components/expenses/ExpenseDashboard';
 import { exportExpensesCsv } from '@/lib/expensesExport';
 
-const money = (n) => '$' + (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+// Whole dollars, always US format ("$12,345"); negatives read "-$1,250", not "$-1,250".
+// (A phone set to Spanish (Spain) would otherwise show twelve thousand as "$12.345".)
+const money = (n) => {
+  const v = Math.round(Number(n) || 0);
+  return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US');
+};
 const num = (v) => (v === '' || v == null ? 0 : Number(v));
 
 function budgetColor(pct) {
@@ -448,7 +453,7 @@ function TradeBudgetTile({ label, icon: Icon, tr = {}, legacy }) {
       </div>
       <div className="text-2xl font-bold mt-1.5 tabular-nums" style={has ? { color } : undefined}>{has ? `${tr.pct}%` : '—'}</div>
       <div className="text-xs text-muted-foreground mt-0.5">
-        {has ? <>{money(tr.spend)} of {money(tr.budget)} · {money(tr.remaining)} left</> : <>{money(tr.spend)} spent · {legacy ? 'split budget to track' : 'no budget set'}</>}
+        {has ? <>{money(tr.spend)} of {money(tr.budget)} · {(tr.remaining || 0) < 0 ? <span className="font-semibold" style={{ color }}>{money(-tr.remaining)} over</span> : <>{money(tr.remaining)} left</>}</> : <>{money(tr.spend)} spent · {legacy ? 'split budget to track' : 'no budget set'}</>}
       </div>
       {has && (
         <div className="h-1.5 rounded-full bg-muted overflow-hidden mt-2">

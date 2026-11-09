@@ -5,7 +5,12 @@ import {
 } from 'recharts';
 import { DollarSign, Clock, Wallet, Zap, Wrench } from 'lucide-react';
 
-const money = (n) => '$' + (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+// Whole dollars, always US format ("$12,345"); negatives read "-$1,250", not "$-1,250".
+// (A phone set to Spanish (Spain) would otherwise show twelve thousand as "$12.345".)
+const money = (n) => {
+  const v = Math.round(Number(n) || 0);
+  return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US');
+};
 // Gold, silver, then distinct steel/green/copper/red/violet/teal tones that read on black.
 const CAT_COLORS = ['hsl(44 66% 50%)', 'hsl(240 6% 85%)', 'hsl(213 40% 60%)', 'hsl(140 45% 52%)', 'hsl(24 60% 55%)', 'hsl(3 70% 62%)', 'hsl(270 30% 66%)', 'hsl(180 35% 50%)'];
 
