@@ -27,7 +27,9 @@ export default function ExpenseDashboard({ summary }) {
   const grandTotal = summary.reduce((s, p) => s + (p.totals?.total || 0), 0);
   const grandBudget = summary.reduce((s, p) => s + (p.totals?.budget || 0), 0);
   const sumTrade = (list, trade, key) => list.reduce((s, p) => s + (p.trades?.[trade]?.[key] || 0), 0);
-  const fmtHrs = (n) => (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
+  // Hours use US format too ("1,234.5"), matching money(); a phone set to
+  // Spanish (Spain) would otherwise show "1.234,5" next to "$12,345".
+  const fmtHrs = (n) => (Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 1 });
   const totalPayroll = summary.reduce((s, p) => s + (p.totals?.payroll || 0), 0);
   const overallPct = grandBudget > 0 ? Math.round(grandTotal / grandBudget * 100) : 0;
 

@@ -439,7 +439,9 @@ function StatTile({ icon: Icon, label, value, sub, tint, value_tint }) {
   );
 }
 
-const fmtHrs = (n) => (Number(n) || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
+// Hours use US format too ("1,234.5"), matching money(); a phone set to
+// Spanish (Spain) would otherwise show "1.234,5" next to "$12,345".
+const fmtHrs = (n) => (Number(n) || 0).toLocaleString('en-US', { maximumFractionDigits: 1 });
 
 function TradeBudgetTile({ label, icon: Icon, tr = {}, legacy }) {
   const has = !legacy && (tr.budget || 0) > 0;
