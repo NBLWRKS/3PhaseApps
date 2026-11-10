@@ -14,6 +14,8 @@ if (!email || !password) {
 
 const now = new Date().toISOString();
 const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
+// Re-adding someone an admin removed earlier: lift the sign-up block.
+db.prepare('DELETE FROM removed_users WHERE email = ?').run(email.toLowerCase());
 
 if (existing) {
   db.prepare('UPDATE users SET password_hash = ?, role = ?, updated_date = ? WHERE id = ?')

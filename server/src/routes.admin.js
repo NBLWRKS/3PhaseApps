@@ -57,6 +57,8 @@ router.put('/users/:id', (req, res) => {
 // company). Their sign-ins stop working immediately, because every request
 // looks the user up by id. Records they created (reports, expenses, training)
 // are kept; those store the creator's email, not a link to this row.
+// The email is also added to removed_users so the person can't simply sign up
+// again (open signup would otherwise hand them back default app access).
 router.delete('/users/:id', (req, res) => {
   const target = db.prepare('SELECT id, email FROM users WHERE id = ?').get(req.params.id);
   if (!target) return res.status(404).json({ error: 'User not found' });
@@ -67,6 +69,8 @@ router.delete('/users/:id', (req, res) => {
     db.prepare('DELETE FROM password_resets WHERE user_id = ?').run(target.id);
     db.prepare('DELETE FROM otps WHERE email = ?').run(target.email);
     db.prepare('DELETE FROM users WHERE id = ?').run(target.id);
+    db.prepare('INSERT OR REPLACE INTO removed_users (email, removed_at, removed_by) VALUES (?, ?, ?)')
+      .run(target.email.toLowerCase(), now(), req.user.email);
   })();
   res.json({ ok: true });
 });

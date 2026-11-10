@@ -15,6 +15,10 @@ const now = () => new Date().toISOString();
 const OPEN_SIGNUP = (process.env.OPEN_SIGNUP || 'true') === 'true';
 // When false, OTP email verification is skipped (no mail server needed).
 
+const REMOVED_MSG = 'This account was removed by an admin. Ask an admin to restore access.';
+const isRemoved = (email) =>
+  !!db.prepare('SELECT 1 FROM removed_users WHERE email = ?').get(String(email || '').toLowerCase());
+
 function createUser(email, password, role = 'user') {
   const id = nanoid();
   const ts = now();
@@ -35,6 +39,7 @@ router.post('/register', (req, res) => {
 
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
   if (existing) return res.status(409).json({ error: 'An account with this email already exists' });
+  if (isRemoved(email)) return res.status(403).json({ error: REMOVED_MSG });
 
   if (!OPEN_SIGNUP) {
     return res.status(403).json({ error: 'Signups are disabled. Ask an admin to create your account.' });
@@ -51,6 +56,7 @@ router.post('/verify-otp', (req, res) => {
   const row = db.prepare('SELECT * FROM otps WHERE email = ?').get((email || '').toLowerCase());
   if (!row || row.code !== String(otpCode)) return res.status(400).json({ error: 'Invalid verification code' });
   if (Date.now() > row.expires_at) return res.status(400).json({ error: 'Code expired' });
+  if (isRemoved(email)) return res.status(403).json({ error: REMOVED_MSG });
 
   const id = nanoid();
   const ts = now();

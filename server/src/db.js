@@ -45,6 +45,14 @@ db.exec(`
     expires_at INTEGER NOT NULL
   );
 
+  -- Emails of accounts an admin removed. Signing up again with one of these is
+  -- refused, so removing someone actually revokes their access.
+  CREATE TABLE IF NOT EXISTS removed_users (
+    email TEXT PRIMARY KEY,
+    removed_at TEXT NOT NULL,
+    removed_by TEXT
+  );
+
   CREATE TABLE IF NOT EXISTS otps (
     email TEXT PRIMARY KEY,
     code TEXT NOT NULL,
