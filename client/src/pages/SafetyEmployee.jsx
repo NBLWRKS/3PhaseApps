@@ -6,14 +6,15 @@ import { canRead, canEdit } from '@/lib/permissions';
 import { Navigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Pencil, ShieldCheck, Loader2, X, Check, Camera, User } from 'lucide-react';
 import { toast } from 'sonner';
-import { format, parseISO, differenceInDays } from 'date-fns';
+import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import logo from '@/assets/logo-dark.png';
 import AppSwitcher from '@/components/layout/AppSwitcher';
 
 // Compute Valid / Expiring soon / Expired from an expiration date.
 function recordStatus(rec) {
   if (!rec.expires_date) return { label: 'No expiry', cls: 'bg-muted text-muted-foreground' };
-  const days = differenceInDays(parseISO(rec.expires_date), new Date());
+  // Calendar days, not 24-hour periods: a card expiring tomorrow is "1d" all day today.
+  const days = differenceInCalendarDays(parseISO(rec.expires_date), new Date());
   if (days < 0) return { label: 'Expired', cls: 'bg-destructive/15 text-destructive' };
   if (days <= 30) return { label: `Expires in ${days}d`, cls: 'bg-amber-500/15 text-amber-400' };
   return { label: 'Valid', cls: 'bg-green-600/15 text-emerald-400' };

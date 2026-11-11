@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { format, parseISO, differenceInDays } from 'date-fns';
+import { format, parseISO, differenceInCalendarDays } from 'date-fns';
 import logo from '@/assets/logo.jpg';
 
 function fmt(d) {
@@ -12,7 +12,8 @@ function fmt(d) {
 function statusOf(rec) {
   if (!rec.expires_date) return null;
   try {
-    const days = differenceInDays(parseISO(rec.expires_date), new Date());
+    // Calendar days, not 24-hour periods: a card expiring tomorrow is "1d" all day today.
+    const days = differenceInCalendarDays(parseISO(rec.expires_date), new Date());
     if (days < 0) return { label: 'EXPIRED', cls: 'text-red-600 border-red-600' };
     if (days <= 30) return { label: 'EXPIRING SOON', cls: 'text-amber-600 border-amber-600' };
     return { label: 'VALID', cls: 'text-green-700 border-green-700' };
