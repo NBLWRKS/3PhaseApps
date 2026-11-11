@@ -7,7 +7,12 @@ import { ImagePlus, X, GripVertical, Trash2, Loader2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 
-export default function ReportBlock({ block, index, onUpdate, onRemove, canRemove }) {
+// Photos may be plain URL strings (legacy) or { url, caption } objects.
+const toPhotos = (images) => (images || []).map((img) =>
+  typeof img === 'string' ? { url: img, caption: '' } : { url: img.url, caption: img.caption || '' }
+);
+
+export default function ReportBlock({ block, index, onUpdate, onRemove, canRemove, onUploadingChange }) {
   const fileInputRef = useRef(null);
 
   const [uploading, setUploading] = React.useState(false);
@@ -15,14 +20,13 @@ export default function ReportBlock({ block, index, onUpdate, onRemove, canRemov
   // Photos may be stored as plain URL strings (legacy) or as { url, caption }
   // objects (new, with per-photo descriptions). Normalize so the rest of the
   // component can always treat them as objects.
-  const photos = (block.images || []).map((img) =>
-    typeof img === 'string' ? { url: img, caption: '' } : { url: img.url, caption: img.caption || '' }
-  );
+  const photos = toPhotos(block.images);
 
   const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
     setUploading(true);
+    onUploadingChange?.(1);
     try {
       // Upload in small batches rather than all at once. Firing dozens of
       // simultaneous uploads (especially large phone photos on mobile data)
@@ -49,7 +53,9 @@ export default function ReportBlock({ block, index, onUpdate, onRemove, canRemov
         }
       }
       if (newPhotos.length) {
-        onUpdate('images', [...photos, ...newPhotos]);
+        // Append to the photos as they are now, not as they were when the
+        // upload started, so captions typed or photos removed meanwhile stay.
+        onUpdate('images', (current) => [...toPhotos(current), ...newPhotos]);
       }
       if (failed > 0) {
         toast.error(
@@ -58,6 +64,7 @@ export default function ReportBlock({ block, index, onUpdate, onRemove, canRemov
       }
     } finally {
       setUploading(false);
+      onUploadingChange?.(-1);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };

@@ -38,6 +38,11 @@ export default function ReportEditor() {
   const [devicesInstalled, setDevicesInstalled] = useState('');
   const [pipeRanFt, setPipeRanFt] = useState('');
   const [bedsInstalled, setBedsInstalled] = useState('');
+  // Photo uploads still in flight, across all sections. Saving while one is
+  // running would store the report without that photo, so Save/Complete wait.
+  const [uploadsInFlight, setUploadsInFlight] = useState(0);
+  const uploading = uploadsInFlight > 0;
+  const trackUpload = (delta) => setUploadsInFlight((n) => Math.max(0, n + delta));
 
   const isMechanical = reportType === 'mechanical';
 
@@ -103,8 +108,12 @@ export default function ReportEditor() {
     },
   });
 
+  // `value` may be a function of the current value, so an upload that finishes
+  // later appends to the section as it is then (keeping captions typed meanwhile).
   const updateBlock = (idx, key, value) => {
-    setBlocks(prev => prev.map((b, i) => i === idx ? { ...b, [key]: value } : b));
+    setBlocks(prev => prev.map((b, i) => i === idx
+      ? { ...b, [key]: typeof value === 'function' ? value(b[key]) : value }
+      : b));
   };
 
   const removeBlock = (idx) => {
@@ -154,15 +163,15 @@ export default function ReportEditor() {
           <Button
             variant="outline"
             onClick={() => saveMutation.mutate(status)}
-            disabled={saveMutation.isPending}
+            disabled={saveMutation.isPending || uploading}
             className="gap-2"
           >
-            {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-            Save Draft
+            {saveMutation.isPending || uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {uploading ? 'Uploading photos…' : 'Save Draft'}
           </Button>
           <Button
             onClick={() => saveMutation.mutate('completed')}
-            disabled={saveMutation.isPending}
+            disabled={saveMutation.isPending || uploading}
             className="gap-2 bg-accent hover:bg-accent/90 text-accent-foreground"
           >
             <CheckCircle2 className="w-4 h-4" />
@@ -293,7 +302,10 @@ export default function ReportEditor() {
             index={idx}
             onUpdate={(key, value) => updateBlock(idx, key, value)}
             onRemove={() => removeBlock(idx)}
-            canRemove={blocks.length > 1}
+            // Sections are keyed by position: removing one mid-upload would send
+            // the finished photos to the wrong section, so wait for uploads.
+            canRemove={blocks.length > 1 && !uploading}
+            onUploadingChange={trackUpload}
           />
         ))}
         <Button variant="outline" onClick={addBlock} className="w-full gap-2 border-dashed h-12">
