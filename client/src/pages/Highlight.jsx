@@ -43,6 +43,9 @@ export default function Highlight() {
   const [project, setProject] = useState('');
   const [team, setTeam] = useState('electrical'); // 'electrical' | 'mechanical'
   const [docId, setDocId] = useState(null);
+  // updated_date of the saved copy this editor is based on. Sent with each save
+  // so the server can refuse if someone else saved the drawing in between.
+  const [baseUpdated, setBaseUpdated] = useState(null);
   // pages: [{ url, width, height }]  — one entry per PDF page, in order.
   const [pages, setPages] = useState([]);
   // regions carry a `page` index (0-based) identifying which page they're on.
@@ -415,7 +418,7 @@ export default function Highlight() {
   // Colors actually used by regions, in palette order — drives the legend UI.
   const usedColors = COLORS.filter((c) => regions.some((r) => r.color === c.value));
 
-  const save = async () => {
+  const save = async ({ force = false } = {}) => {
     if (!hasPages) return;
     setSaving(true);
     setError('');
@@ -431,15 +434,35 @@ export default function Highlight() {
       image_height: pages[0]?.height || 0,
       regions,
       legend,
+      base_updated_date: baseUpdated,
+      force,
     };
     try {
       const result = docId
         ? await base44.highlight.update(docId, payload)
         : await base44.highlight.create(payload);
       setDocId(result.id);
+      setBaseUpdated(result.updated_date || null);
       toast.success('Saved');
       loadDocs();
     } catch (err) {
+      if (err.status === 409 && !force) {
+        // Someone else saved this drawing after it was opened here. Saving now
+        // would replace their highlights, so ask first. Cancel keeps this
+        // version on screen (it can still be exported) without saving.
+        const c = err.data?.conflict || {};
+        let when = '';
+        try { when = c.updated_date ? ` at ${format(new Date(c.updated_date), 'h:mm a')}` : ''; } catch { /* keep blank */ }
+        const ok = confirm(
+          `${c.updated_by || 'Someone else'} saved this drawing${when}, after you opened it.\n\n`
+          + 'OK: save yours anyway and replace their highlights.\n'
+          + 'Cancel: don\'t save. Your version stays on screen; reopen the drawing from the Library to see theirs.'
+        );
+        setSaving(false);
+        if (ok) save({ force: true });
+        else setError('Not saved: someone else saved this drawing after you opened it.');
+        return;
+      }
       setError(err.message || 'Save failed');
       toast.error(err.message || 'Save failed');
     } finally {
@@ -476,6 +499,7 @@ export default function Highlight() {
     try {
       const doc = await base44.highlight.get(id);
       setDocId(doc.id);
+      setBaseUpdated(doc.updated_date || null);
       setTitle(doc.title || 'Untitled');
       setProject(doc.project || '');
       setTeam(doc.team === 'mechanical' ? 'mechanical' : 'electrical');
@@ -513,6 +537,7 @@ export default function Highlight() {
 
   const newDoc = () => {
     setDocId(null);
+    setBaseUpdated(null);
     setTitle('Untitled');
     setProject('');
     setTeam('electrical');
@@ -962,7 +987,7 @@ export default function Highlight() {
                   </p>
                 )}
                 {!readOnly && (
-                  <Button onClick={save} disabled={saving} className="gap-2 w-full">
+                  <Button onClick={() => save()} disabled={saving} className="gap-2 w-full">
                     {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                     {docId ? 'Update document' : 'Save document'}
                   </Button>

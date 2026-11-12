@@ -151,6 +151,16 @@ router.put('/:id', appEditRequired('highlight'), (req, res) => {
   const existing = db.prepare('SELECT * FROM highlights WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Document not found' });
   const data = req.body || {};
+  // Saves replace the whole drawing (all highlights), so a save based on an
+  // older copy would silently erase whatever someone else saved meanwhile.
+  // The editor sends the updated_date it loaded; if the document has changed
+  // since, refuse with 409 unless the person chose to overwrite (force).
+  if (data.base_updated_date && data.base_updated_date !== existing.updated_date && !data.force) {
+    return res.status(409).json({
+      error: 'Someone else saved this drawing after you opened it.',
+      conflict: { updated_by: existing.updated_by, updated_date: existing.updated_date },
+    });
+  }
   const pick = (k) => (k in data ? data[k] : existing[k]);
   const merged = {
     title: pick('title'),
