@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import logo from '@/assets/logo-dark.png';
 import AppSwitcher from '@/components/layout/AppSwitcher';
 import ExpenseDashboard from '@/components/expenses/ExpenseDashboard';
+import CostBreakdown from '@/components/expenses/CostBreakdown';
 import { exportExpensesCsv } from '@/lib/expensesExport';
 
 // Whole dollars, always US format ("$12,345"); negatives read "-$1,250", not "$-1,250".
@@ -550,6 +551,8 @@ function ProjectCard({ project: p, editable, categories, onMergeWeeks, onAddWeek
           {BUDGET_CATS.map((meta) => <CatBudget key={meta[0]} data={bud[meta[0]] || {}} meta={meta} onClick={() => setDrillCat(meta)} />)}
         </div>
       </div>
+
+      <CostBreakdown project={p} />
 
       <PurchaseOrders project={p} editable={editable} onAddPO={onAddPO} onSavePO={onSavePO} onDelPO={onDelPO} />
 
