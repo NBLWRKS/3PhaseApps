@@ -87,6 +87,29 @@ export default function Highlight() {
   const [panning, setPanning] = useState(false);
 
   const hasPages = pages.length > 0;
+
+  // ---- Unsaved changes ----
+  // `savedSnap` is the drawing as last opened or saved; anything different on
+  // screen is unsaved. New, Open and closing the tab ask before discarding it.
+  const snapshot = React.useMemo(
+    () => JSON.stringify({ title, project, team, pages, regions, legend }),
+    [title, project, team, pages, regions, legend]
+  );
+  const [savedSnap, setSavedSnap] = useState(snapshot);
+  const [markCleanPending, setMarkCleanPending] = useState(false);
+  // After New/Open the state settles over a render; take the clean copy then.
+  useEffect(() => {
+    if (markCleanPending) { setSavedSnap(snapshot); setMarkCleanPending(false); }
+  }, [markCleanPending, snapshot]);
+  const dirty = hasPages && snapshot !== savedSnap && !markCleanPending;
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const warn = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+  const okToDiscard = () =>
+    !dirty || confirm('This drawing has unsaved changes. Discard them?');
   const isAdmin = user?.role === 'admin';
   const canAccess = canRead(user, 'highlight');
   const readOnly = !canEdit(user, 'highlight');
@@ -420,6 +443,7 @@ export default function Highlight() {
 
   const save = async ({ force = false } = {}) => {
     if (!hasPages) return;
+    const snapAtSave = snapshot;
     setSaving(true);
     setError('');
     const payload = {
@@ -443,6 +467,7 @@ export default function Highlight() {
         : await base44.highlight.create(payload);
       setDocId(result.id);
       setBaseUpdated(result.updated_date || null);
+      setSavedSnap(snapAtSave);
       toast.success('Saved');
       loadDocs();
     } catch (err) {
@@ -496,6 +521,7 @@ export default function Highlight() {
   };
 
   const openDoc = async (id) => {
+    if (!okToDiscard()) return;
     try {
       const doc = await base44.highlight.get(id);
       setDocId(doc.id);
@@ -517,6 +543,7 @@ export default function Highlight() {
       setLegend(doc.legend && typeof doc.legend === 'object' ? doc.legend : {});
       setSelectedId(null);
       setShowLibrary(false);
+      setMarkCleanPending(true);
     } catch (err) {
       toast.error('Failed to open document');
     }
@@ -546,6 +573,7 @@ export default function Highlight() {
     setRegions([]);
     setLegend({});
     setSelectedId(null);
+    setMarkCleanPending(true);
   };
 
   return (
@@ -997,7 +1025,7 @@ export default function Highlight() {
                   Export PDF
                 </Button>
                 {!readOnly && (
-                  <Button variant="outline" onClick={newDoc} className="gap-2 w-full">
+                  <Button variant="outline" onClick={() => { if (okToDiscard()) newDoc(); }} className="gap-2 w-full">
                     <Plus className="w-4 h-4" />
                     New document
                   </Button>
