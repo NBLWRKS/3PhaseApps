@@ -23,12 +23,14 @@ const FIXED = [
   { key: 'rentals', label: 'Equipment Rentals' },
   { key: 'other', label: 'Other' },
 ];
-const CATEGORY_KEY = {
-  'Materials – Electrical': 'elec_materials',
-  'Materials – Mechanical': 'mech_materials',
-  'Equipment Rental': 'rentals',
-  Other: 'other',
-};
+// A Map, not an object: category names are free text, and a name such as
+// "constructor" must not match a built-in object property.
+const CATEGORY_KEY = new Map([
+  ['Materials – Electrical', 'elec_materials'],
+  ['Materials – Mechanical', 'mech_materials'],
+  ['Equipment Rental', 'rentals'],
+  ['Other', 'other'],
+]);
 
 export function weekLabel(iso) {
   if (!ISO.test(iso || '')) return iso || 'No date';
@@ -53,7 +55,7 @@ const addDays = (iso, n) => {
 export function buildCostBreakdown(p, period = 'week') {
   const weeks = [...(p?.weeks || [])].sort((a, b) => String(a.week_ending).localeCompare(String(b.week_ending)));
   const custom = new Set();
-  for (const w of weeks) for (const it of w.items || []) if (!(it.category in CATEGORY_KEY)) custom.add(it.category || 'Uncategorized');
+  for (const w of weeks) for (const it of w.items || []) if (!CATEGORY_KEY.has(it.category)) custom.add(it.category || 'Uncategorized');
   const customCols = [...custom].sort().map((c) => ({ key: `cat:${c}`, label: c }));
   const columns = [...FIXED, ...customCols];
 
@@ -77,7 +79,7 @@ export function buildCostBreakdown(p, period = 'week') {
     r.values.elec_payroll += num(w.elec_pay) + num(w.staff_elec_pay);
     r.values.mech_payroll += num(w.mech_pay) + num(w.staff_mech_pay);
     for (const it of w.items || []) {
-      const k = CATEGORY_KEY[it.category] || `cat:${it.category || 'Uncategorized'}`;
+      const k = CATEGORY_KEY.get(it.category) || `cat:${it.category || 'Uncategorized'}`;
       r.values[k] += num(it.amount);
     }
   }
@@ -102,14 +104,20 @@ export function buildCostBreakdown(p, period = 'week') {
     r.values.rentals += cost;
   }
 
+  // Add up the unrounded amounts and round only what's shown, so the totals
+  // match the project's Total spend even when amounts have fractions of a cent.
   const list = [...rows.values()].sort((a, b) => a.sort.localeCompare(b.sort));
   const totals = Object.fromEntries(columns.map((c) => [c.key, 0]));
+  let total = 0;
   for (const r of list) {
-    for (const c of columns) { r.values[c.key] = round2(r.values[c.key]); totals[c.key] += r.values[c.key]; }
-    r.total = round2(columns.reduce((s, c) => s + r.values[c.key], 0));
+    let rowTotal = 0;
+    for (const c of columns) { totals[c.key] += r.values[c.key]; rowTotal += r.values[c.key]; }
+    total += rowTotal;
+    r.total = round2(rowTotal);
+    for (const c of columns) r.values[c.key] = round2(r.values[c.key]);
   }
   for (const c of columns) totals[c.key] = round2(totals[c.key]);
-  const total = round2(list.reduce((s, r) => s + r.total, 0));
+  total = round2(total);
   return { columns, rows: list, totals, total, period };
 }
 
