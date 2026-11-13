@@ -686,7 +686,7 @@ export default function Highlight() {
                       </Button>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={converting || readOnly} className={`gap-2 ${readOnly ? 'hidden' : ''}`}>
+                  <Button variant="outline" size="sm" onClick={() => { if (okToDiscard()) fileInputRef.current?.click(); }} disabled={converting || readOnly} className={`gap-2 ${readOnly ? 'hidden' : ''}`}>
                     {converting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                     {converting ? (progress || 'Loading…') : 'Replace PDF'}
                   </Button>
