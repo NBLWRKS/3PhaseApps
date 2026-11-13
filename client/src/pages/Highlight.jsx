@@ -483,9 +483,10 @@ export default function Highlight() {
           + 'OK: save yours anyway and replace their highlights.\n'
           + 'Cancel: don\'t save. Your version stays on screen; reopen the drawing from the Library to see theirs.'
         );
-        setSaving(false);
-        if (ok) save({ force: true });
-        else setError('Not saved: someone else saved this drawing after you opened it.');
+        // Wait for the forced save, so Save stays disabled until it's done
+        // (a second click meanwhile would conflict again with an old base).
+        if (ok) { await save({ force: true }); return; }
+        setError('Not saved: someone else saved this drawing after you opened it.');
         return;
       }
       setError(err.message || 'Save failed');
