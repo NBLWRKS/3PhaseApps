@@ -285,7 +285,14 @@ const expenses = {
 
 export const base44 = {
   auth,
-  entities: { Report: entity('Report'), User: entity('User') },
+  entities: {
+    Report: {
+      ...entity('Report'),
+      // How many reports match (same filters as filter(), e.g. { q, created_by }).
+      count: (filters = {}) => request('GET', `/entities/Report/count${buildQuery(filters)}`),
+    },
+    User: entity('User'),
+  },
   integrations,
   functions,
   admin,

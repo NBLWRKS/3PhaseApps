@@ -26,28 +26,46 @@ function parseSort(sort) {
 router.use(authRequired);
 router.use(appAccessRequired('reports'));
 
-// GET /api/entities/Report?sort=-created_date&limit=100&created_by=email
-router.get('/', (req, res) => {
-  const { sort, limit, ...filters } = req.query;
-  const orderBy = parseSort(sort);
+// WHERE clause shared by the list and the count: exact-match field filters,
+// plus q = text search in project or "report by" (case-insensitive).
+function buildWhere(query) {
   const where = [];
   const params = [];
   const filterable = new Set([...FIELDS, 'created_by', 'id']);
-  for (const [k, v] of Object.entries(filters)) {
-    if (filterable.has(k)) {
+  for (const [k, v] of Object.entries(query)) {
+    if (filterable.has(k) && typeof v === 'string') {
       where.push(`${k} = ?`);
       params.push(v);
     }
   }
-  let sql = 'SELECT * FROM reports';
-  if (where.length) sql += ' WHERE ' + where.join(' AND ');
-  sql += ` ORDER BY ${orderBy}`;
-  if (limit) {
-    sql += ' LIMIT ?';
-    params.push(Number(limit));
+  const q = typeof query.q === 'string' ? query.q.trim() : '';
+  if (q) {
+    const pat = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    where.push("(project LIKE ? ESCAPE '\\' OR report_by LIKE ? ESCAPE '\\')");
+    params.push(pat, pat);
+  }
+  return { sql: where.length ? ' WHERE ' + where.join(' AND ') : '', params };
+}
+
+// GET /api/entities/Report?sort=-created_date&limit=100&offset=0&q=text&created_by=email
+router.get('/', (req, res) => {
+  const { sort, limit, offset } = req.query;
+  const orderBy = parseSort(sort);
+  const { sql: whereSql, params } = buildWhere(req.query);
+  let sql = `SELECT * FROM reports${whereSql} ORDER BY ${orderBy}`;
+  const lim = Math.floor(Number(limit));
+  if (lim > 0) {
+    sql += ' LIMIT ? OFFSET ?';
+    params.push(lim, Math.max(0, Math.floor(Number(offset)) || 0));
   }
   const rows = db.prepare(sql).all(...params);
   res.json(rows.map(rowToReport));
+});
+
+// GET /api/entities/Report/count?q=&created_by=  -> { count } (same filters as the list)
+router.get('/count', (req, res) => {
+  const { sql, params } = buildWhere(req.query);
+  res.json({ count: db.prepare(`SELECT COUNT(*) AS n FROM reports${sql}`).get(...params).n });
 });
 
 // GET /api/entities/Report/:id

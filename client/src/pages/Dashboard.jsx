@@ -1,6 +1,6 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { canEdit, canSupervise } from '@/lib/permissions';
@@ -14,6 +14,7 @@ import ReportCard from '@/components/reports/ReportCard';
 import EmptyState from '@/components/reports/EmptyState';
 
 const PULL_THRESHOLD = 72;
+const PAGE_SIZE = 100;
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -32,14 +33,36 @@ export default function Dashboard() {
   // Admins and Reports supervisors see everyone's reports; others see only theirs.
   const seesAllReports = isAdmin || canSupervise(user, 'reports');
 
-  const { data: reports = [], isLoading, refetch } = useQuery({
-    queryKey: ['reports', user?.email, seesAllReports],
-    queryFn: () =>
-      seesAllReports
-        ? base44.entities.Report.list('-created_date', 100)
-        : base44.entities.Report.filter({ created_by: user?.email }, '-created_date', 100),
+  // Reports load newest first, PAGE_SIZE at a time ("Load older reports").
+  // Text search runs on the server so it finds reports that aren't loaded yet.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+  const baseFilters = seesAllReports ? {} : { created_by: user?.email };
+  const searchFilters = debouncedSearch ? { ...baseFilters, q: debouncedSearch } : baseFilters;
+
+  const {
+    data, isLoading, refetch, fetchNextPage, hasNextPage, isFetchingNextPage, isFetching,
+  } = useInfiniteQuery({
+    queryKey: ['reports', user?.email, seesAllReports, debouncedSearch],
+    queryFn: ({ pageParam }) =>
+      base44.entities.Report.filter({ ...searchFilters, offset: pageParam }, '-created_date', PAGE_SIZE),
+    initialPageParam: 0,
+    getNextPageParam: (last, pages) => (last.length === PAGE_SIZE ? pages.length * PAGE_SIZE : undefined),
+    placeholderData: (prev) => prev,
     enabled: !!user,
   });
+  const reports = data?.pages.flat() ?? [];
+
+  // True number of reports (the list itself may only hold the newest page).
+  const { data: countData } = useQuery({
+    queryKey: ['reports', 'count', user?.email, seesAllReports],
+    queryFn: () => base44.entities.Report.count(baseFilters),
+    enabled: !!user,
+  });
+  const totalReports = countData?.count ?? reports.length;
 
   // Pull-to-refresh handlers
   const handleTouchStart = useCallback((e) => {
@@ -67,6 +90,7 @@ export default function Dashboard() {
   }, [pullY, isRefreshing, refetch]);
 
   const filtered = reports.filter((r) => {
+    // While the server search catches up with typing, narrow what's loaded.
     const matchesSearch = !search ||
       (r.project || '').toLowerCase().includes(search.toLowerCase()) ||
       (r.report_by || '').toLowerCase().includes(search.toLowerCase());
@@ -159,10 +183,10 @@ export default function Dashboard() {
       </div>
 
       {/* Stats row */}
-      {reports.length > 0 && (
+      {totalReports > 0 && (
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: 'Total Reports', value: reports.length, icon: FileText, color: 'text-primary' },
+            { label: 'Total Reports', value: totalReports, icon: FileText, color: 'text-primary' },
             { label: 'Sections', value: totalBlocks, icon: Layers, color: 'text-destructive' },
             { label: 'Photos', value: totalImages, icon: Image, color: 'text-accent' },
           ].map(({ label, value, icon: Icon, color }) => (
@@ -180,7 +204,7 @@ export default function Dashboard() {
       )}
 
       {/* Filters */}
-      {reports.length > 0 && (
+      {totalReports > 0 && (
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -208,7 +232,7 @@ export default function Dashboard() {
       )}
 
       {/* Type filter */}
-      {reports.length > 0 && (
+      {totalReports > 0 && (
         <div className="flex gap-2">
           {[
             { value: 'all', label: 'All Types', Icon: null },
@@ -230,15 +254,29 @@ export default function Dashboard() {
       )}
 
       {/* Report grid */}
-      {reports.length === 0 ? (
+      {totalReports === 0 && !debouncedSearch ? (
         <EmptyState />
       ) : filtered.length === 0 ? (
-        <p className="text-center text-muted-foreground py-12">No reports match your filter.</p>
+        <p className="text-center text-muted-foreground py-12">
+          {isFetching && !isFetchingNextPage ? 'Searching…' : hasNextPage ? 'No loaded reports match your filter. Load older reports to look further back.' : 'No reports match your filter.'}
+        </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((report) => (
             <ReportCard key={report.id} report={report} />
           ))}
+        </div>
+      )}
+
+      {hasNextPage && (
+        <div className="flex flex-col items-center gap-1.5">
+          <Button variant="outline" onClick={() => fetchNextPage()} disabled={isFetchingNextPage} className="min-h-[44px] gap-2">
+            {isFetchingNextPage && <RefreshCw className="w-4 h-4 animate-spin" aria-hidden="true" />}
+            Load older reports
+          </Button>
+          {!debouncedSearch && (
+            <p className="text-xs text-muted-foreground">Showing the newest {reports.length} of {totalReports}</p>
+          )}
         </div>
       )}
     </div>
