@@ -8,7 +8,10 @@
 //   base44.functions.invoke(name, body)
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
-const TOKEN_KEY = 'pm_access_token';
+export const TOKEN_KEY = 'pm_access_token';
+// Fired on window when a signed-in request comes back 401 (sign-in expired,
+// reset by an admin, or the account was removed). SessionExpiredBanner shows it.
+export const SESSION_EXPIRED_EVENT = 'pm:session-expired';
 
 function getToken() {
   try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
@@ -31,6 +34,9 @@ async function request(method, pathName, { body, isForm } = {}) {
   const res = await fetch(`${API_BASE}${pathName}`, { method, headers, body: payload });
   const isJson = (res.headers.get('content-type') || '').includes('application/json');
   const data = isJson ? await res.json() : null;
+  if (res.status === 401 && token && !pathName.startsWith('/auth/') && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+  }
   if (!res.ok) {
     const err = new Error((data && data.error) || res.statusText);
     err.status = res.status;
