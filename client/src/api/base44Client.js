@@ -128,11 +128,6 @@ const admin = {
 
 // Highlight app: convert PDFs to PNG and manage highlighted conveyor docs.
 const highlight = {
-  convertPdf: async (file) => {
-    const form = new FormData();
-    form.append('file', file);
-    return request('POST', '/highlight/convert', { body: form, isForm: true });
-  },
   list: () => request('GET', '/highlight'),
   get: (id) => request('GET', `/highlight/${id}`),
   create: (data) => request('POST', '/highlight', { body: data }),

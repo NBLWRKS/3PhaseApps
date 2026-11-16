@@ -1,29 +1,16 @@
 import express from 'express';
-import multer from 'multer';
-import fs from 'fs';
-import path from 'path';
 import { nanoid } from 'nanoid';
 import db from './db.js';
 import { authRequired, appReadRequired, appEditRequired } from './auth.js';
-import { uploadDir } from './routes.uploads.js';
-import { pdfFirstPageToPng } from './pdf-to-png.js';
 import { buildHighlightPdf } from './export-pdf.js';
 
 const router = express.Router();
 const now = () => new Date().toISOString();
 
-// PDFs are converted in memory; the resulting PNG is written to disk.
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 40 * 1024 * 1024 }, // 40MB PDFs
-  fileFilter: (_req, file, cb) => {
-    cb(null, file.mimetype === 'application/pdf' || /\.pdf$/i.test(file.originalname));
-  },
-});
-
 router.use(authRequired);
-// Read access required for all highlight routes; create/update/delete and the
-// PDF-convert upload additionally require edit access (applied per-route).
+// Read access required for all highlight routes; create/update/delete
+// additionally require edit access (applied per-route). PDFs are turned into
+// page images in the browser (client/src/lib/pdf-render.js), not here.
 router.use(appReadRequired('highlight'));
 
 function rowToDoc(row) {
@@ -35,36 +22,6 @@ function rowToDoc(row) {
     legend: JSON.parse(row.legend || '{}'),
   };
 }
-
-// POST /api/highlight/convert  (multipart, field "file": a PDF)
-// Converts page 1 to PNG, stores it, returns { file_url, width, height }.
-router.post('/convert', appEditRequired('highlight'), upload.single('file'), async (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No PDF uploaded' });
-  const tag = `[highlight/convert ${nanoid(5)}]`;
-  const sizeKb = Math.round((req.file.size || req.file.buffer.length) / 1024);
-  console.log(`${tag} received ${sizeKb}KB from ${req.user?.email || 'unknown'}`);
-  const t0 = Date.now();
-  try {
-    const { png, width, height } = await pdfFirstPageToPng(req.file.buffer, 2.0, {
-      log: (m) => console.log(`${tag} ${m} (+${Date.now() - t0}ms)`),
-    });
-    const filename = `highlight-${nanoid()}.png`;
-    fs.writeFileSync(path.join(uploadDir, filename), png);
-    const base = process.env.PUBLIC_URL || '';
-    console.log(`${tag} success in ${Date.now() - t0}ms`);
-    res.json({ file_url: `${base}/uploads/${filename}`, width, height });
-  } catch (err) {
-    // Log full detail server-side so it shows up in the Render Logs tab.
-    console.error(`${tag} failed after ${Date.now() - t0}ms:`, err && err.stack ? err.stack : err);
-    const msg = String(err && err.message ? err.message : err);
-    const hint = /canvas|\.node|cannot find module|GLIBC|invalid ELF|napi/i.test(msg)
-      ? 'Image rendering library failed to load on the server. Check that @napi-rs/canvas installed correctly for this platform.'
-      : /timed out/i.test(msg)
-      ? 'The PDF took too long to render. It may be very large or complex.'
-      : null;
-    res.status(500).json({ error: `Failed to convert PDF: ${msg}`, hint });
-  }
-});
 
 function sendPdf(res, buffer, filename) {
   const safe = (filename || 'highlight').replace(/[^\w.-]+/g, '_').slice(0, 80);
