@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 import { PACKET } from '@/lib/applicationPacket';
 import { buildFilledPdfs, fieldId } from '@/lib/fillPacket';
 import { CheckCircle2, Circle, ChevronLeft, ChevronRight, Loader2, Download, FileText, ArrowRight } from 'lucide-react';
@@ -263,21 +263,27 @@ function Progress({ forms, current, t }) {
 
 function FieldInput({ field, lang, value, onChange }) {
   const label = field.label?.[lang] || field.label?.en || '';
+  // Each label is tied to its control (htmlFor/id), and the Yes/No and
+  // multiple-choice buttons are a radio group, so screen readers announce
+  // every field by name and which answer is selected.
+  const uid = useId();
+  const inputId = `pf-${uid}`;
+  const labelId = `pf-${uid}-label`;
   if (field.type === 'fixed') {
     return (
       <div>
-        <label className="text-sm font-medium text-foreground">{label}</label>
-        <div className="mt-1 px-3 py-2 rounded-lg border border-border bg-muted text-sm text-muted-foreground">{field.value}</div>
+        <span id={labelId} className="text-sm font-medium text-foreground">{label}</span>
+        <div aria-labelledby={labelId} className="mt-1 px-3 py-2 rounded-lg border border-border bg-muted text-sm text-muted-foreground">{field.value}</div>
       </div>
     );
   }
   if (field.type === 'yesno') {
     return (
       <div>
-        <label className="text-sm font-medium text-foreground block mb-1.5">{label}</label>
-        <div className="flex gap-2">
+        <span id={labelId} className="text-sm font-medium text-foreground block mb-1.5">{label}</span>
+        <div className="flex gap-2" role="radiogroup" aria-labelledby={labelId}>
           {[['yes', lang === 'es' ? 'Sí' : 'Yes'], ['no', 'No']].map(([v, lbl]) => (
-            <button key={v} type="button" onClick={() => onChange(v)}
+            <button key={v} type="button" onClick={() => onChange(v)} role="radio" aria-checked={value === v}
               className={`px-4 py-2 rounded-lg border text-sm font-medium ${value === v ? 'bg-primary text-primary-foreground border-primary' : 'border-border bg-card'}`}>
               {lbl}
             </button>
@@ -289,10 +295,10 @@ function FieldInput({ field, lang, value, onChange }) {
   if (field.type === 'radio') {
     return (
       <div>
-        <label className="text-sm font-medium text-foreground block mb-1.5">{label}</label>
-        <div className="space-y-1.5">
+        <span id={labelId} className="text-sm font-medium text-foreground block mb-1.5">{label}</span>
+        <div className="space-y-1.5" role="radiogroup" aria-labelledby={labelId}>
           {field.options.map((o) => (
-            <button key={o.value} type="button" onClick={() => onChange(o.value)}
+            <button key={o.value} type="button" onClick={() => onChange(o.value)} role="radio" aria-checked={value === o.value}
               className={`w-full text-left px-3 py-2 rounded-lg border text-sm ${value === o.value ? 'bg-primary text-primary-foreground border-primary' : 'border-border bg-card'}`}>
               {o.label[lang]}
             </button>
@@ -304,8 +310,8 @@ function FieldInput({ field, lang, value, onChange }) {
   if (field.type === 'state') {
     return (
       <div>
-        <label className="text-sm font-medium text-foreground">{label}</label>
-        <select value={value || ''} onChange={(e) => onChange(e.target.value)}
+        <label htmlFor={inputId} className="text-sm font-medium text-foreground">{label}</label>
+        <select id={inputId} value={value || ''} onChange={(e) => onChange(e.target.value)}
           className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-card text-sm outline-none focus:border-primary">
           <option value="">—</option>
           {US_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
@@ -316,8 +322,8 @@ function FieldInput({ field, lang, value, onChange }) {
   const inputType = field.type === 'email' ? 'email' : field.type === 'tel' ? 'tel' : 'text';
   return (
     <div>
-      <label className="text-sm font-medium text-foreground">{label}</label>
-      <input type={inputType} value={value || ''} onChange={(e) => onChange(e.target.value)}
+      <label htmlFor={inputId} className="text-sm font-medium text-foreground">{label}</label>
+      <input id={inputId} type={inputType} value={value || ''} onChange={(e) => onChange(e.target.value)}
         inputMode={field.type === 'ssn' || field.type === 'tel' ? 'numeric' : undefined}
         className="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-card text-sm outline-none focus:border-primary" />
     </div>
