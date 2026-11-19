@@ -15,6 +15,7 @@ import trackingRoutes from './routes.tracking.js';
 import expenseRoutes from './routes.expenses.js';
 import applicationRoutes from './routes.applications.js';
 import onboardingRoutes from './routes.onboarding.js';
+import portalRoutes from './routes.portal.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -60,6 +61,7 @@ app.use('/api/tracking', trackingRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/applications', applicationRoutes);
 app.use('/api/onboarding', onboardingRoutes);
+app.use('/api/portal', portalRoutes);
 
 // Public app settings endpoint (frontend AuthContext probes this).
 // Auth here is "required" so the app gates behind login.

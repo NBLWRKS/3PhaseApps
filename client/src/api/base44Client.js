@@ -91,13 +91,15 @@ const auth = {
 
   setToken: (t) => setToken(t),
 
+  // Pass a path such as '/portal/login' to land on that sign-in page instead.
   logout: (redirectTo) => {
     setToken(null);
-    window.location.href = '/login';
+    window.location.href = typeof redirectTo === 'string' && redirectTo.startsWith('/') ? redirectTo : '/login';
   },
 
+  // Customer Portal pages have their own sign-in page.
   redirectToLogin: (_fromUrl) => {
-    window.location.href = '/login';
+    window.location.href = window.location.pathname.toLowerCase().startsWith('/portal') ? '/portal/login' : '/login';
   },
 
   resetPasswordRequest: (email) =>
@@ -130,6 +132,20 @@ const admin = {
   deleteUser: (id) => request('DELETE', `/admin/users/${id}`),
   setUserPassword: (id, password) =>
     request('POST', `/admin/users/${id}/password`, { body: { password } }),
+};
+
+// Customer Portal: project dashboards for customers. Customers can only read
+// their own portal; internal editors update content; admins manage logins.
+const portal = {
+  list: () => request('GET', '/portal'),
+  get: (id) => request('GET', `/portal/${id}`),
+  create: (data) => request('POST', '/portal', { body: data }),
+  update: (id, data) => request('PUT', `/portal/${id}`, { body: data }),
+  delete: (id) => request('DELETE', `/portal/${id}`),
+  listLogins: (id) => request('GET', `/portal/${id}/customers`),
+  addLogin: (id, data) => request('POST', `/portal/${id}/customers`, { body: data }),
+  resetLogin: (id, uid, password) => request('POST', `/portal/${id}/customers/${uid}/password`, { body: { password } }),
+  removeLogin: (id, uid) => request('DELETE', `/portal/${id}/customers/${uid}`),
 };
 
 // Highlight app: convert PDFs to PNG and manage highlighted conveyor docs.
@@ -303,6 +319,7 @@ export const base44 = {
   onboarding,
   tracking,
   expenses,
+  portal,
   _getToken: getToken,
   _setToken: setToken,
 };

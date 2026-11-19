@@ -301,6 +301,21 @@ ensureColumn('reports', 'report_type', "TEXT NOT NULL DEFAULT 'electrical'");
 ensureColumn('reports', 'beds_installed', 'INTEGER');
 ensureColumn('users', 'app_permissions', `TEXT NOT NULL DEFAULT '["reports"]'`);
 ensureColumn('users', 'password_changed_at', 'INTEGER'); // ms epoch; sign-ins issued earlier are rejected
+// Customer Portal: customer logins have role 'customer' and see only this portal.
+ensureColumn('users', 'portal_id', 'TEXT');
+db.exec(`
+  CREATE TABLE IF NOT EXISTS portals (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    customer TEXT,
+    sections TEXT NOT NULL DEFAULT '[]',   -- JSON: tables shown in the portal
+    source_file TEXT,                      -- name of the workbook they came from
+    created_by TEXT,
+    created_date TEXT NOT NULL,
+    updated_by TEXT,
+    updated_date TEXT NOT NULL
+  );
+`);
 ensureColumn('highlights', 'updated_by', 'TEXT');
 ensureColumn('highlights', 'pages', "TEXT NOT NULL DEFAULT '[]'");
 ensureColumn('highlights', 'project', 'TEXT');

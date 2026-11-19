@@ -17,7 +17,7 @@ router.get('/apps', (_req, res) => {
 // GET /api/admin/users -> all users with role + permissions
 router.get('/users', (_req, res) => {
   const rows = db
-    .prepare('SELECT id, email, full_name, role, app_permissions, created_date FROM users ORDER BY created_date ASC')
+    .prepare("SELECT id, email, full_name, role, app_permissions, created_date FROM users WHERE role != 'customer' ORDER BY created_date ASC")
     .all();
   const users = rows.map((u) => ({
     ...u,
@@ -34,6 +34,11 @@ router.put('/users/:id', (req, res) => {
   if (!target) return res.status(404).json({ error: 'User not found' });
 
   const data = req.body || {};
+
+  // Customer Portal logins are managed on their portal page, never promoted here.
+  if (target.role === 'customer') {
+    return res.status(400).json({ error: 'Customer portal logins are managed from their portal.' });
+  }
 
   // Guard: an admin cannot strip their own admin role (prevents lockout).
   if (target.id === req.user.id && 'role' in data && data.role !== 'admin') {

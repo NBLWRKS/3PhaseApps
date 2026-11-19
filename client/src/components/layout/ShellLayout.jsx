@@ -7,11 +7,13 @@ import AppSidebar from './AppSidebar';
 // left and the page shifts right to make room. Each page still handles its own
 // sign-in and permission checks, exactly as before.
 export default function ShellLayout() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  // Customer Portal logins get no internal navigation at all.
+  const sidebar = isAuthenticated && user?.role !== 'customer';
   return (
     <>
-      <AppSidebar />
-      <div className={isAuthenticated ? 'lg:pl-60' : undefined}>
+      {sidebar && <AppSidebar />}
+      <div className={sidebar ? 'lg:pl-60' : undefined}>
         <Outlet />
       </div>
     </>

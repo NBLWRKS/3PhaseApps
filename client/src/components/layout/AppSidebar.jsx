@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutGrid, FileText, Highlighter, BarChart3, DollarSign,
-  ShieldCheck, GraduationCap, FolderOpen, Shield, LogOut,
+  ShieldCheck, GraduationCap, FolderOpen, Shield, LogOut, Building2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
 import { canRead } from '@/lib/permissions';
@@ -28,6 +28,7 @@ const GROUPS = [
       { key: 'safety', name: 'Safety Credentials', path: '/safety', icon: ShieldCheck },
       { key: 'onboarding', name: 'Onboarding', path: '/onboarding-admin', icon: GraduationCap },
       { key: 'applications', name: 'Applications', path: '/applications', icon: FolderOpen },
+      { key: 'portal', name: 'Customer Portal', path: '/portal', icon: Building2 },
     ],
   },
 ];

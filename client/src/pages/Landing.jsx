@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import logo from '@/assets/logo-dark.png';
-import { FileText, ArrowRight, Zap, Wrench, Clock, LogOut, Shield, Loader2, Highlighter, ShieldCheck, BarChart3, DollarSign, FolderOpen, GraduationCap } from 'lucide-react';
+import { FileText, ArrowRight, Zap, Wrench, LogOut, Shield, Loader2, Highlighter, ShieldCheck, BarChart3, DollarSign, FolderOpen, GraduationCap, Building2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 // Catalog of apps shown on the splash. `key` matches the server's app keys and
@@ -66,11 +66,12 @@ const APPS = [
     path: '/onboarding-admin',
   },
   {
-    key: 'soon-1',
-    name: 'More coming soon',
-    description: 'Additional tools for the field and the office are on the way.',
-    icon: Clock,
-    live: false,
+    key: 'portal',
+    name: 'Customer Portal',
+    description: 'Read-only project dashboards for customers, with their own logins. Upload the project workbook to update what they see.',
+    icon: Building2,
+    live: true,
+    path: '/portal',
   },
 ];
 

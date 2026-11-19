@@ -2,7 +2,7 @@
 import { Toaster } from "@/components/ui/sonner"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -32,9 +32,13 @@ import Dashboard from '@/pages/Dashboard';
 import ReportEditor from '@/pages/ReportEditor';
 import ReportView from '@/pages/ReportView';
 import ApplyPacket from '@/pages/ApplyPacket';
+import PortalLogin from '@/pages/PortalLogin';
+import PortalHome from '@/pages/PortalHome';
+import Portal from '@/pages/Portal';
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, user } = useAuth();
+  const location = useLocation();
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
@@ -52,7 +56,7 @@ const AuthenticatedApp = () => {
       // register, splash, etc.) render normally and handle their own gating,
       // which avoids a redirect loop when a stored token has expired.
       const path = window.location.pathname;
-      const publicPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/', '/admin', '/apply', '/onboarding'];
+      const publicPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/', '/admin', '/apply', '/onboarding', '/portal/login'];
       // The public credential card (/SafetyCredentials/:slug) is viewable
       // without login — the QR on the ID cards points here.
       const isPublicCard = path.toLowerCase().startsWith('/safetycredentials');
@@ -63,9 +67,15 @@ const AuthenticatedApp = () => {
     }
   }
 
+  // Customer Portal logins only ever see their portal.
+  if (user?.role === 'customer' && !location.pathname.toLowerCase().startsWith('/portal')) {
+    return <Navigate to="/portal" replace />;
+  }
+
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/portal/login" element={<PortalLogin />} />
       <Route path="/register" element={<Register />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
@@ -95,6 +105,8 @@ const AuthenticatedApp = () => {
         <Route path="/expenses" element={<Expenses />} />
         <Route path="/applications" element={<Applications />} />
         <Route path="/onboarding-admin" element={<OnboardingAdmin />} />
+        <Route path="/portal" element={<PortalHome />} />
+        <Route path="/portal/:id" element={<Portal />} />
         <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
           <Route element={<AppLayout />}>
             <Route path="/reports" element={<Dashboard />} />

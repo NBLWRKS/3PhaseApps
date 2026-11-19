@@ -25,7 +25,7 @@ export function getUserFromToken(token) {
   if (!token) return null;
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare('SELECT id, email, full_name, role, app_permissions, created_date, updated_date, password_changed_at FROM users WHERE id = ?').get(payload.sub);
+    const user = db.prepare('SELECT id, email, full_name, role, app_permissions, created_date, updated_date, password_changed_at, portal_id FROM users WHERE id = ?').get(payload.sub);
     if (!user) return null;
     // An admin password reset signs the person out everywhere: reject tokens
     // issued (iat, in seconds) before the second the password was changed.
@@ -52,6 +52,15 @@ function extractToken(req) {
 export function authRequired(req, res, next) {
   const user = getUserFromToken(extractToken(req));
   if (!user) return res.status(401).json({ error: 'Unauthorized' });
+  // Customer Portal logins (people outside the company) may only use their
+  // own sign-in and the portal API. Every internal app is off limits to them,
+  // whatever else the route checks.
+  if (user.role === 'customer') {
+    const url = (req.originalUrl || '').split('?')[0];
+    if (!url.startsWith('/api/portal') && !url.startsWith('/api/auth/')) {
+      return res.status(403).json({ error: 'Not available for customer portal accounts' });
+    }
+  }
   req.user = user;
   next();
 }

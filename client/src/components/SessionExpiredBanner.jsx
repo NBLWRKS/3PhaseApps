@@ -35,7 +35,7 @@ export default function SessionExpiredBanner() {
         <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
         <span className="font-semibold">Your sign-in has expired, so nothing you change now is being saved.</span>
         <span>
-          <a href="/login" target="_blank" rel="noopener" className="underline font-semibold">Sign in again</a>
+          <a href={pathname.toLowerCase().startsWith('/portal') ? '/portal/login' : '/login'} target="_blank" rel="noopener" className="underline font-semibold">Sign in again</a>
           {' '}in a new tab, then come back here and save. Your work on this page is kept.
         </span>
       </div>
