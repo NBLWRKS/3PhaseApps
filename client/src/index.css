@@ -51,6 +51,43 @@
   }
 }
 
+/* Customer Portal: light theme. The portal pages add this class to <html>
+   while they're open (lib/usePortalLight.js), so every token-based color on
+   the page, shadcn/ui components included, switches to the light palette. */
+@layer base {
+  html.portal-light {
+    color-scheme: light;
+    --background: 40 20% 98%;         /* warm white #FBFAF7 */
+    --foreground: 240 10% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 10%;
+    --primary: 40 85% 32%;            /* deep gold #977009, readable on white */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 40 18% 94%;
+    --secondary-foreground: 240 10% 12%;
+    --muted: 40 18% 94%;
+    --muted-foreground: 240 5% 36%;
+    --accent: 43 74% 66%;
+    --accent-foreground: 240 10% 10%;
+    --destructive: 0 70% 44%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 40 10% 86%;
+    --input: 40 10% 80%;
+    --ring: 40 85% 32%;
+    --sidebar-background: 40 20% 96%;
+    --sidebar-foreground: 240 6% 30%;
+    --sidebar-primary: 40 85% 32%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 43 60% 90%;
+    --sidebar-accent-foreground: 40 85% 26%;
+    --sidebar-border: 40 10% 86%;
+    --sidebar-ring: 40 85% 32%;
+  }
+  html.portal-light body { background-color: hsl(var(--background)); color: hsl(var(--foreground)); }
+}
+
 /* ---- Micro-animations ---------------------------------------------------- */
 @keyframes tp-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes tp-sheen { from { background-position: -200% 0; } to { background-position: 200% 0; } }

@@ -5,11 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Building2, Mail, Lock, Loader2 } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
+import usePortalLight from '@/lib/usePortalLight';
 
 // Sign-in page for the Customer Portal: the address we give to customers.
 // Same accounts system as the rest of the app, but no sign-up link, and it
 // always lands on the portal afterwards.
 export default function PortalLogin() {
+  usePortalLight();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Building2, FileSpreadsheet, Loader2, LogOut, KeyRound, UserX, UserPlus, Copy, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -7,7 +7,8 @@ import { useAuth } from '@/lib/AuthContext';
 import { readXlsx } from '@/lib/xlsxRead';
 import { sheetsToSections, formatCell, alignRight } from '@/lib/portalSections';
 import AppSwitcher from '@/components/layout/AppSwitcher';
-import logo from '@/assets/logo-dark.png';
+import logo from '@/assets/logo.jpg';
+import usePortalLight from '@/lib/usePortalLight';
 
 const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }); } catch { return ''; } };
 
@@ -20,33 +21,76 @@ function generatePassword() {
 }
 const copy = async (t) => { try { await navigator.clipboard.writeText(t); toast.success('Copied'); } catch { /* selectable on screen */ } };
 
-// One table from the workbook.
+// One table from the workbook, always shown in full with no sideways scrolling.
+// It's drawn as a table when every column fits the space available (wide
+// tables use a more compact size); if it doesn't fit, e.g. on a phone or a
+// 16-column sheet on a laptop, each row becomes a card of label/value pairs.
+// The table stays laid out (hidden) so the check re-runs as the window resizes.
 function SectionTable({ section }) {
   const { columns, rows } = section;
-  // Long text (descriptions, notes) gets room to wrap; short text stays on one line.
+  const wrapRef = useRef(null);
+  const tableRef = useRef(null);
+  const [fits, setFits] = useState(true);
+  useLayoutEffect(() => {
+    const check = () => {
+      const w = wrapRef.current, t = tableRef.current;
+      if (w && t) setFits(t.offsetWidth <= w.clientWidth + 1);
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    if (wrapRef.current) ro.observe(wrapRef.current);
+    return () => ro.disconnect();
+  }, [section]);
+  const compact = columns.length >= 12;
   const longest = columns.map((_, ci) => Math.max(0, ...rows.map((r) => String(r.cells[ci] ?? '').length)));
+  const filled = (r) => columns.map((c, ci) => ({ c, v: formatCell(r.cells[ci], c.kind) })).filter((x) => x.v !== '');
+  const pad = compact ? 'px-1.5' : 'px-2.5';
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-card">
-      <table className="w-full text-sm tabular-nums border-collapse">
-        <thead>
-          <tr className="text-xs text-muted-foreground">
-            {columns.map((c, i) => (
-              <th key={i} scope="col" className={`px-3 py-2.5 font-medium border-b border-border align-bottom ${alignRight(c.kind) ? 'text-right' : 'text-left'} ${c.kind === 'text' && longest[i] > 40 ? 'min-w-[14rem]' : 'whitespace-nowrap'}`}>{c.label}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, ri) => (
-            <tr key={ri} className={r.total ? 'font-semibold bg-secondary/40' : 'hover:bg-secondary/30'}>
-              {columns.map((c, ci) => (
-                <td key={ci} className={`px-3 py-2 border-b border-border/60 align-top ${alignRight(c.kind) ? 'text-right whitespace-nowrap' : longest[ci] > 40 ? 'text-left whitespace-pre-line' : 'text-left whitespace-nowrap'}`}>
-                  {formatCell(r.cells[ci], c.kind)}
-                </td>
+    <div ref={wrapRef} className="relative">
+      <div className={fits ? 'rounded-xl border border-border bg-card' : 'absolute inset-x-0 top-0 h-0 overflow-hidden invisible'} aria-hidden={!fits}>
+        <table ref={tableRef} className={`w-full tabular-nums border-collapse ${compact ? 'text-[11px] xl:text-xs' : 'text-xs xl:text-sm'}`}>
+          <thead>
+            <tr className="text-muted-foreground">
+              {columns.map((c, i) => (
+                <th key={i} scope="col" className={`${pad} py-2 font-semibold border-b border-border align-bottom leading-tight ${alignRight(c.kind) ? 'text-right' : 'text-left'}`}
+                  style={c.kind === 'text' && longest[i] > 40 ? { minWidth: compact ? '8rem' : '11rem' } : undefined}>{c.label}</th>
               ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((r, ri) => (
+              <tr key={ri} className={r.total ? 'font-semibold bg-secondary' : 'even:bg-secondary/40'}>
+                {columns.map((c, ci) => (
+                  <td key={ci} className={`${pad} py-1.5 border-b border-border/70 align-top break-words ${alignRight(c.kind) ? 'text-right whitespace-nowrap' : 'text-left whitespace-pre-line'}`}>
+                    {formatCell(r.cells[ci], c.kind)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {!fits && (
+        <ul className="grid gap-2.5 md:grid-cols-2 2xl:grid-cols-3">
+          {rows.map((r, ri) => {
+            const items = filled(r);
+            if (!items.length) return null;
+            return (
+              <li key={ri} className={`rounded-xl border p-3 ${r.total ? 'border-primary/40 bg-secondary font-semibold' : 'border-border bg-card'}`}>
+                <dl className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-3 gap-y-1 text-sm">
+                  {items.map(({ c, v }, k) => (
+                    <React.Fragment key={k}>
+                      <dt className="text-muted-foreground text-xs pt-0.5">{c.label || '—'}</dt>
+                      <dd className={`min-w-0 break-words whitespace-pre-line ${alignRight(c.kind) ? 'tabular-nums' : ''}`}>{v}</dd>
+                    </React.Fragment>
+                  ))}
+                </dl>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
@@ -57,7 +101,7 @@ function Sections({ sections }) {
   const s = sections[i];
   return (
     <div className="space-y-4">
-      <div role="tablist" aria-label="Project sections" className="flex gap-1.5 overflow-x-auto pb-1">
+      <div role="tablist" aria-label="Project sections" className="flex flex-wrap gap-1.5">
         {sections.map((x, k) => (
           <button key={k} role="tab" aria-selected={k === i} aria-controls={`portal-panel-${k}`} id={`portal-tab-${k}`} onClick={() => setTab(k)}
             className={`px-3.5 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition ${k === i ? 'bg-primary text-primary-foreground' : 'border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-secondary'}`}>
@@ -249,6 +293,7 @@ function PortalSettings({ portal, isAdmin, onSaved }) {
 }
 
 export default function Portal() {
+  usePortalLight();
   const { id } = useParams();
   const { user, isLoadingAuth } = useAuth();
   const [portal, setPortal] = useState(undefined);
@@ -261,9 +306,9 @@ export default function Portal() {
 
   const header = isCustomer ? (
     <header className="sticky top-0 z-40 bg-card/90 backdrop-blur border-b border-border" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
-      <div className="max-w-7xl mx-auto px-5 h-14 flex items-center justify-between gap-3">
+      <div className="max-w-[1680px] mx-auto px-4 sm:px-5 h-14 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
-          <img src={logo} alt="3 Phase Conveyor" className="h-5 sm:h-6 w-auto shrink-0" />
+          <img src={logo} alt="3 Phase Conveyor" className="h-7 sm:h-8 w-auto shrink-0" />
           <span className="text-sm font-semibold text-muted-foreground border-l border-border pl-2.5 truncate">Customer Portal</span>
         </div>
         <button type="button" onClick={() => base44.auth.logout('/portal/login')} className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"><LogOut className="w-4 h-4" aria-hidden="true" /> Sign out</button>
@@ -271,7 +316,7 @@ export default function Portal() {
     </header>
   ) : (
     <header className="sticky top-0 z-40 bg-card/80 backdrop-blur border-b border-border">
-      <div className="max-w-7xl mx-auto px-5 h-14 flex items-center justify-between">
+      <div className="max-w-[1680px] mx-auto px-4 sm:px-5 h-14 flex items-center justify-between">
         <Link to="/portal" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="w-4 h-4" aria-hidden="true" /> All portals</Link>
         <AppSwitcher currentKey="portal" />
       </div>
@@ -281,7 +326,7 @@ export default function Portal() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {header}
-      <main className="max-w-7xl mx-auto px-5 py-6 space-y-6">
+      <main className="max-w-[1680px] mx-auto px-4 sm:px-5 py-6 space-y-6">
         {portal === undefined ? (
           <div className="flex items-center gap-2 text-muted-foreground py-16 justify-center"><Loader2 className="w-5 h-5 animate-spin" /> Loading…</div>
         ) : portal === null ? (

@@ -6,13 +6,15 @@ import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { canRead, canEdit } from '@/lib/permissions';
 import AppSwitcher from '@/components/layout/AppSwitcher';
-import logo from '@/assets/logo-dark.png';
+import logo from '@/assets/logo.jpg';
+import usePortalLight from '@/lib/usePortalLight';
 
 const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return ''; } };
 
 // /portal — internal users: the list of customer portals (editors can add one).
 // Customers: go straight to the one portal they have.
 export default function PortalHome() {
+  usePortalLight();
   const { user, isLoadingAuth } = useAuth();
   const navigate = useNavigate();
   const [portals, setPortals] = useState(null);
