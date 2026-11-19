@@ -34,8 +34,18 @@ app.use(
 );
 app.use(express.json({ limit: '5mb' }));
 
-// Serve uploaded files
-app.use('/uploads', express.static(uploadDir, { maxAge: '7d' }));
+// Serve uploaded files. Application packets (SSN, bank, I-9) are stored under
+// uploads/applications but must only be downloaded through the signed-in
+// /api/applications/file route, so that folder is never served here. The path
+// is decoded and normalized first, so %61pplications or a/../applications
+// can't slip past the check.
+app.use('/uploads', (req, res, next) => {
+  let p;
+  try { p = decodeURIComponent(req.path); } catch { return res.status(400).end(); }
+  const rel = path.posix.normalize(p).replace(/^\/+/, '').toLowerCase();
+  if (rel === 'applications' || rel.startsWith('applications/')) return res.status(404).json({ error: 'Not found' });
+  next();
+}, express.static(uploadDir, { maxAge: '7d' }));
 
 // --- API ---
 app.use('/api/auth', authRoutes);

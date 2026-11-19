@@ -7,7 +7,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import db from './db.js';
-import { authRequired, appReadRequired } from './auth.js';
+import { authRequired, appReadRequired, appEditRequired } from './auth.js';
 import { uploadDir } from './routes.uploads.js';
 
 const router = express.Router();
@@ -124,8 +124,8 @@ router.get('/file/:appId/:stored', authRequired, appReadRequired('applications')
   fs.createReadStream(full).pipe(res);
 });
 
-// ===== GATED: delete a submission (and its files) =====
-router.delete('/:appId', authRequired, appReadRequired('applications'), (req, res) => {
+// ===== GATED: delete a submission (and its files) — edit access only =====
+router.delete('/:appId', authRequired, appEditRequired('applications'), (req, res) => {
   const row = db.prepare('SELECT files FROM applications WHERE id = ?').get(req.params.appId);
   if (!row) return res.status(404).json({ error: 'Not found' });
   for (const f of safeParse(row.files)) {

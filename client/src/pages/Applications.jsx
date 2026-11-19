@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
-import { canRead } from '@/lib/permissions';
+import { canRead, canEdit } from '@/lib/permissions';
 import { Loader2, FileText, Download, Trash2, ShieldAlert, FolderOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo-dark.png';
@@ -98,9 +98,11 @@ export default function Applications() {
                       {fmtDate(a.created_date)}{a.lang ? ` · ${a.lang.toUpperCase()}` : ''} · {(a.files || []).length} file{(a.files || []).length === 1 ? '' : 's'}
                     </div>
                   </div>
+{canEdit(user, 'applications') && (
                   <button onClick={() => del(a.id, a.applicant)} className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-secondary transition" title="Delete application">
                     <Trash2 className="w-4 h-4" />
                   </button>
+                  )}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {(a.files || []).map((f) => (
