@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, PieChart, Pie, Legend, Area, AreaChart,
 } from 'recharts';
-import { DollarSign, Clock, Wallet, Zap, Wrench } from 'lucide-react';
+import { DollarSign, Clock, Wallet, Zap, Wrench, HardHat } from 'lucide-react';
 
 // Whole dollars, always US format ("$12,345"); negatives read "-$1,250", not "$-1,250".
 // (A phone set to Spanish (Spain) would otherwise show twelve thousand as "$12.345".)
@@ -97,7 +97,10 @@ export default function ExpenseDashboard({ summary }) {
             </div>
           ))}
         </div>
-        {safety > 0 && <p className="text-xs text-muted-foreground mt-4">Includes {money(safety)} of Safety purchases, split 50/50 ({money(safety / 2)} each).</p>}
+        <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-sm">
+          <span className="font-medium flex items-center gap-1.5"><HardHat className="w-4 h-4 text-muted-foreground" aria-hidden="true" /> Safety</span>
+          <span className="tabular-nums">{money(safety)} <span className="text-xs text-muted-foreground">spent · its own category, not in either trade</span></span>
+        </div>
         {unassigned > 0 && <p className="text-xs text-muted-foreground mt-4">{money(unassigned)} of rentals / expense lines has no trade and counts toward the total only.</p>}
       </Card>
 

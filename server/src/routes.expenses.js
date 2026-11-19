@@ -16,7 +16,8 @@ const now = () => new Date().toISOString();
 const num = (v) => { const n = Number(v); return isNaN(n) ? 0 : n; };
 
 // Trade of a cost: 'Electrical' | 'Mechanical' | 'Safety' | null (unassigned).
-// Safety costs are shared: they're split 50/50 between Electrical and Mechanical.
+// Safety is its own category: Safety costs are totalled together and are not
+// part of the Electrical or Mechanical spend or budget.
 function normTrade(v) {
   const s = String(v ?? '').trim().toLowerCase();
   if (!s) return null;
@@ -25,12 +26,9 @@ function normTrade(v) {
   if (s.startsWith('s')) return 'Safety';
   return null;
 }
-// Add an amount to a per-trade tally, splitting Safety evenly across both trades.
+// Add an amount to a per-trade tally (Electrical, Mechanical, Safety or Unassigned).
 function addToTrade(tally, trade, amount) {
-  const key = trade || 'Unassigned';
-  if (key === 'Safety') {
-    tally.Electrical += amount / 2; tally.Mechanical += amount / 2; tally.Safety += amount;
-  } else tally[key] += amount;
+  tally[trade || 'Unassigned'] += amount;
 }
 // Materials categories carry their trade in the name; other lines use their own trade field.
 function itemTrade(it) {
@@ -138,7 +136,7 @@ function buildSummary(projectId) {
       total: coRows.reduce((s, c) => s + num(c.total), 0),
     };
     // Budgets are set per trade. Change orders raise the budget of their trade
-    // (unassigned COs raise only the overall budget). Projects created before the
+    // (Safety and unassigned COs raise only the overall budget). Projects created before the
     // split keep their single overall budget until both trade budgets are entered.
     const coByTrade = { Electrical: 0, Mechanical: 0, Safety: 0, Unassigned: 0 };
     for (const c of coRows) addToTrade(coByTrade, normTrade(c.trade), num(c.total));
@@ -158,7 +156,6 @@ function buildSummary(projectId) {
         remaining: budget - spend,
         pct: budget > 0 ? Math.round((spend / budget) * 100) : 0,
         payroll,
-        safety_share: tradeSpend.Safety / 2,          // this trade's half of Safety spend (included in spend)
         hours: ownHours + staffHours, own_hours: ownHours, staff_hours: staffHours,
       };
     };
