@@ -5,7 +5,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { nanoid } from 'nanoid';
 import db from './db.js';
-import { authRequired, adminRequired } from './auth.js';
+import { authRequired, adminRequired, appReadRequired } from './auth.js';
+import { canAccessReport } from './routes.reports.js';
 import { uploadDir, publicBase } from './routes.uploads.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -55,10 +56,11 @@ function photoOf(item) {
 }
 
 // POST /api/functions/generatePdf  { reportId }  -> { data: { file_url } }
-router.post('/generatePdf', authRequired, safeAsync('PDF export', async (req, res) => {
+router.post('/generatePdf', authRequired, appReadRequired('reports'), safeAsync('PDF export', async (req, res) => {
   const { reportId } = req.body || {};
   const report = getReport(reportId);
-  if (!report) return res.status(404).json({ error: 'Report not found' });
+  // Same visibility as the Reports API: your own, or everyone's for supervisors/admins.
+  if (!canAccessReport(req.user, report)) return res.status(404).json({ error: 'Report not found' });
 
   const filename = `report-${reportId}-${nanoid(6)}.pdf`;
   const outPath = path.join(uploadDir, filename);

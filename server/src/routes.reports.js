@@ -1,7 +1,8 @@
 import express from 'express';
 import { nanoid } from 'nanoid';
 import db from './db.js';
-import { authRequired, appAccessRequired } from './auth.js';
+import { authRequired, appAccessRequired, appEditRequired } from './auth.js';
+import { hasAppLevel } from './apps.js';
 
 const router = express.Router();
 const now = () => new Date().toISOString();
@@ -25,6 +26,18 @@ function parseSort(sort) {
 
 router.use(authRequired);
 router.use(appAccessRequired('reports'));
+
+// Who may see and change which reports (same rules as the Reports screens):
+// admins and Reports supervisors see and edit everyone's; everyone else only
+// their own. Creating, editing and deleting also need Reports edit access.
+export function seesAllReports(user) {
+  return user?.role === 'admin' || hasAppLevel(user?.app_permissions, 'reports', 'supervisor');
+}
+export function canAccessReport(user, row) {
+  return !!row && (seesAllReports(user) || row.created_by === user?.email);
+}
+// The list and count only ever cover the reports this person may see.
+const scopedQuery = (req) => (seesAllReports(req.user) ? req.query : { ...req.query, created_by: req.user.email });
 
 // WHERE clause shared by the list and the count: exact-match field filters,
 // plus q = text search in project or "report by" (case-insensitive).
@@ -51,7 +64,7 @@ function buildWhere(query) {
 router.get('/', (req, res) => {
   const { sort, limit, offset } = req.query;
   const orderBy = parseSort(sort);
-  const { sql: whereSql, params } = buildWhere(req.query);
+  const { sql: whereSql, params } = buildWhere(scopedQuery(req));
   let sql = `SELECT * FROM reports${whereSql} ORDER BY ${orderBy}`;
   const lim = Math.floor(Number(limit));
   if (lim > 0) {
@@ -64,19 +77,19 @@ router.get('/', (req, res) => {
 
 // GET /api/entities/Report/count?q=&created_by=  -> { count } (same filters as the list)
 router.get('/count', (req, res) => {
-  const { sql, params } = buildWhere(req.query);
+  const { sql, params } = buildWhere(scopedQuery(req));
   res.json({ count: db.prepare(`SELECT COUNT(*) AS n FROM reports${sql}`).get(...params).n });
 });
 
 // GET /api/entities/Report/:id
 router.get('/:id', (req, res) => {
   const row = db.prepare('SELECT * FROM reports WHERE id = ?').get(req.params.id);
-  if (!row) return res.status(404).json({ error: 'Report not found' });
+  if (!canAccessReport(req.user, row)) return res.status(404).json({ error: 'Report not found' });
   res.json(rowToReport(row));
 });
 
 // POST /api/entities/Report
-router.post('/', (req, res) => {
+router.post('/', appEditRequired('reports'), (req, res) => {
   const data = req.body || {};
   if (!data.project) return res.status(400).json({ error: 'project is required' });
   const id = nanoid();
@@ -104,9 +117,9 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/entities/Report/:id
-router.put('/:id', (req, res) => {
+router.put('/:id', appEditRequired('reports'), (req, res) => {
   const existing = db.prepare('SELECT * FROM reports WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ error: 'Report not found' });
+  if (!canAccessReport(req.user, existing)) return res.status(404).json({ error: 'Report not found' });
   const data = req.body || {};
   // Use "key present in payload" semantics (not nullish), so the editor can
   // explicitly clear a field (e.g. null out pipe_ran_ft when switching to a
@@ -138,7 +151,9 @@ router.put('/:id', (req, res) => {
 });
 
 // DELETE /api/entities/Report/:id
-router.delete('/:id', (req, res) => {
+router.delete('/:id', appEditRequired('reports'), (req, res) => {
+  const existing = db.prepare('SELECT * FROM reports WHERE id = ?').get(req.params.id);
+  if (!canAccessReport(req.user, existing)) return res.status(404).json({ error: 'Report not found' });
   db.prepare('DELETE FROM reports WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });
