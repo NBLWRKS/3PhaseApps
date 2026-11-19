@@ -1,4 +1,5 @@
-import { Toaster } from "@/components/ui/toaster"
+// Every page sends messages with sonner's toast(), so mount sonner's Toaster.
+import { Toaster } from "@/components/ui/sonner"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
@@ -117,7 +118,7 @@ function App() {
           <SessionExpiredBanner />
           <AuthenticatedApp />
         </Router>
-        <Toaster />
+        <Toaster theme="dark" position="top-center" />
       </QueryClientProvider>
     </AuthProvider>
   )
