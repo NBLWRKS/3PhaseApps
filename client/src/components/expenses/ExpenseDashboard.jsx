@@ -3,7 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, PieChart, Pie, Legend, Area, AreaChart,
 } from 'recharts';
-import { DollarSign, Clock, Wallet, Zap, Wrench, HardHat } from 'lucide-react';
+import { DollarSign, Clock, Wallet, Zap, Wrench, HardHat, Trash } from 'lucide-react';
 
 // Whole dollars, always US format ("$12,345"); negatives read "-$1,250", not "$-1,250".
 // (A phone set to Spanish (Spain) would otherwise show twelve thousand as "$12.345".)
@@ -61,6 +61,7 @@ export default function ExpenseDashboard({ summary }) {
   }), [scoped]);
   const unassigned = scoped.reduce((s, p) => s + (p.trades?.unassigned?.spend || 0), 0);
   const safety = scoped.reduce((s, p) => s + (p.trades?.safety?.spend || 0), 0);
+  const dumpsters = scoped.reduce((s, p) => s + (p.trades?.dumpsters?.spend || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -100,6 +101,10 @@ export default function ExpenseDashboard({ summary }) {
         <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-sm">
           <span className="font-medium flex items-center gap-1.5"><HardHat className="w-4 h-4 text-muted-foreground" aria-hidden="true" /> Safety</span>
           <span className="tabular-nums">{money(safety)} <span className="text-xs text-muted-foreground">spent · its own category, not in either trade</span></span>
+        </div>
+        <div className="mt-2 flex items-center justify-between text-sm">
+          <span className="font-medium flex items-center gap-1.5"><Trash className="w-4 h-4 text-muted-foreground" aria-hidden="true" /> Dumpsters</span>
+          <span className="tabular-nums">{money(dumpsters)} <span className="text-xs text-muted-foreground">spent · its own category, not in either trade</span></span>
         </div>
         {unassigned > 0 && <p className="text-xs text-muted-foreground mt-4">{money(unassigned)} of rentals / expense lines has no trade and counts toward the total only.</p>}
       </Card>

@@ -94,7 +94,7 @@ export default function CostBreakdown({ project }) {
         </div>
       )}
       <p className="text-xs text-muted-foreground mt-2">
-        Payroll includes staffing. Safety is every expense line and rental tagged Safety. Equipment Rentals includes the Rentals log, counted on the delivery date.
+        Payroll includes staffing. Safety and Dumpsters are every expense line and rental tagged with that trade. Equipment Rentals includes the Rentals log, counted on the delivery date.
         {period === 'month' ? ' Each week counts in the month of its week-ending date.' : ''}
       </p>
     </section>

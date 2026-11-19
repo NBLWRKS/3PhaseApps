@@ -6,13 +6,14 @@ import { canRead, canEdit } from '@/lib/permissions';
 import {
   Plus, Trash2, ChevronDown, Loader2, LayoutDashboard, Table2,
   Download, Upload, DollarSign, FolderPlus, CalendarPlus, Zap, Wrench,
-  Package, Truck, Users, Pencil, FileText, Wallet, Clock, X, Combine, HardHat
+  Package, Truck, Users, Pencil, FileText, Wallet, Clock, X, Combine, HardHat, Trash, ListPlus
 } from 'lucide-react';
 import { toast } from 'sonner';
 import logo from '@/assets/logo-dark.png';
 import AppSwitcher from '@/components/layout/AppSwitcher';
 import ExpenseDashboard from '@/components/expenses/ExpenseDashboard';
 import CostBreakdown from '@/components/expenses/CostBreakdown';
+import ImportLinesModal from '@/components/expenses/ImportLinesModal';
 import { exportExpensesCsv } from '@/lib/expensesExport';
 
 // Whole dollars, always US format ("$12,345"); negatives read "-$1,250", not "$-1,250".
@@ -50,6 +51,7 @@ export default function Expenses() {
   const [selectedId, setSelectedId] = useState(null);
   const [budgetModal, setBudgetModal] = useState(null);
   const [importFor, setImportFor] = useState(null);
+  const [importLinesFor, setImportLinesFor] = useState(null);
   const [rentalTypes, setRentalTypes] = useState(['Scissor Lift', 'Gas Monitor', 'Fork Lift', 'Donkey']);
   const [rentalModalFor, setRentalModalFor] = useState(null);
   const [mergeFor, setMergeFor] = useState(null);
@@ -211,7 +213,7 @@ export default function Expenses() {
             onAddWeek={addWeek} onSaveWeek={saveWeek} onDelWeek={delWeek}
             onAddItem={addItem} onSaveItem={saveItem} onDelItem={delItem}
             onDelProject={delProject} onEditBudget={() => setBudgetModal(selected)}
-            onImport={() => setImportFor(selected)} onAddCategory={addCategory}
+            onImport={() => setImportFor(selected)} onImportLines={() => setImportLinesFor(selected)} onAddCategory={addCategory}
             onAddCO={addCO} onSaveCO={saveCO} onDelCO={delCO}
             onAddPO={addPO} onSavePO={savePO} onDelPO={delPO}
             onAddRental={() => setRentalModalFor(selected)} onSaveRental={saveRental} onDelRental={delRental}
@@ -223,6 +225,10 @@ export default function Expenses() {
       {budgetModal && (
         <BudgetModal project={budgetModal === 'new' ? null : budgetModal}
           onClose={() => setBudgetModal(null)} onSaved={() => { setBudgetModal(null); load(); }} />
+      )}
+      {importLinesFor && (
+        <ImportLinesModal project={importLinesFor} categories={categories}
+          onClose={() => setImportLinesFor(null)} onDone={() => { setImportLinesFor(null); refresh(); }} />
       )}
       {importFor && (
         <ImportModal project={importFor} onClose={() => setImportFor(null)} onDone={() => { setImportFor(null); load(); }} />
@@ -258,7 +264,7 @@ function BudgetModal({ project, onClose, onSaved }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="w-full max-w-md rounded-2xl bg-card border border-border shadow-xl p-5" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold mb-1">{isNew ? 'New Project' : `Budget — ${project.name}`}</h2>
-        <p className="text-xs text-muted-foreground mb-4">Set the Electrical and Mechanical budgets. Each trade's payroll, staffing, materials and tagged expenses are measured against its own budget; anything tagged Safety is totalled separately as its own category and doesn't count against either trade. The overall budget is the two combined.</p>
+        <p className="text-xs text-muted-foreground mb-4">Set the Electrical and Mechanical budgets. Each trade's payroll, staffing, materials and tagged expenses are measured against its own budget; anything tagged Safety or Dumpsters is totalled separately as its own category and doesn't count against either trade. The overall budget is the two combined.</p>
         {legacy && (
           <div className="text-xs rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 mb-4">
             This project has a single overall budget of <span className="font-semibold">{money(project.budget_total)}</span> from before the split. Enter the Electrical and Mechanical amounts to replace it.
@@ -468,7 +474,7 @@ function TradeBudgetTile({ label, icon: Icon, tr = {}, legacy }) {
   );
 }
 
-const TRADES = ['Electrical', 'Mechanical', 'Safety']; // Safety is its own category, not part of either trade
+const TRADES = ['Electrical', 'Mechanical', 'Safety', 'Dumpsters']; // Safety and Dumpsters are their own categories, not part of either trade
 function TradeSelect({ value, onChange, className = '' }) {
   return (
     <select value={value || ''} onChange={(e) => onChange(e.target.value || null)} aria-label="Trade"
@@ -495,7 +501,7 @@ function CatBudget({ data, meta, onClick }) {
   );
 }
 
-function ProjectCard({ project: p, editable, categories, onMergeWeeks, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onImport, onAddCategory, onAddCO, onSaveCO, onDelCO, onAddPO, onSavePO, onDelPO, onAddRental, onSaveRental, onDelRental }) {
+function ProjectCard({ project: p, editable, categories, onMergeWeeks, onAddWeek, onSaveWeek, onDelWeek, onAddItem, onSaveItem, onDelItem, onDelProject, onEditBudget, onImport, onImportLines, onAddCategory, onAddCO, onSaveCO, onDelCO, onAddPO, onSavePO, onDelPO, onAddRental, onSaveRental, onDelRental }) {
   const t = p.totals || {};
   const tr = p.trades || {};
   const bud = p.budgets || {};
@@ -512,6 +518,7 @@ function ProjectCard({ project: p, editable, categories, onMergeWeeks, onAddWeek
           <div className="flex items-center gap-1.5">
             <button onClick={() => onAddWeek(p.id)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card text-sm text-muted-foreground hover:text-foreground hover:bg-secondary transition"><CalendarPlus className="w-4 h-4" /> Week</button>
             <button onClick={onImport} title="Import weekly totals" className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-primary hover:bg-secondary transition"><Upload className="w-4 h-4" /></button>
+            <button onClick={onImportLines} title="Import expense lines (e.g. from QuickBooks)" aria-label="Import expense lines" className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-primary hover:bg-secondary transition"><ListPlus className="w-4 h-4" /></button>
             <button onClick={onMergeWeeks} title="Merge split weeks" aria-label="Merge split weeks" className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-primary hover:bg-secondary transition"><Combine className="w-4 h-4" /></button>
             <button onClick={onEditBudget} title="Edit budgets" className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-primary hover:bg-secondary transition"><Pencil className="w-4 h-4" /></button>
             <button onClick={() => onDelProject(p)} title="Delete project" className="p-2 rounded-lg border border-border bg-card text-muted-foreground hover:text-destructive hover:bg-secondary transition"><Trash2 className="w-4 h-4" /></button>
@@ -519,8 +526,8 @@ function ProjectCard({ project: p, editable, categories, onMergeWeeks, onAddWeek
         )}
       </div>
 
-      {/* KPI stat tiles: overall, one budget tile per trade, Safety on its own,
-          then payroll (full width of its row) and one man-hours tile per trade */}
+      {/* KPI stat tiles: overall, one budget tile per trade, Safety, then
+          Dumpsters, payroll and one man-hours tile per trade (8 tiles, even rows) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatTile icon={DollarSign} label="Total spend" value={money(t.total)}
           sub={t.budget > 0 ? `${t.budget_pct}% of ${money(t.budget)} overall budget` : 'no budget set'}
@@ -530,7 +537,10 @@ function ProjectCard({ project: p, editable, categories, onMergeWeeks, onAddWeek
         <StatTile icon={HardHat} label="Safety" value={money(tr.safety?.spend)}
           sub={(tr.safety?.change_orders || 0) !== 0 ? `all costs tagged Safety · ${money(tr.safety.change_orders)} Safety change orders` : 'all costs tagged Safety'}
           tint="hsl(140 45% 52%)" />
-        <StatTile icon={Users} label="Payroll" value={money(t.payroll)} sub="own + staffing" tint="hsl(44 66% 50%)" className="col-span-2" />
+        <StatTile icon={Trash} label="Dumpsters" value={money(tr.dumpsters?.spend)}
+          sub={(tr.dumpsters?.change_orders || 0) !== 0 ? `all costs tagged Dumpsters · ${money(tr.dumpsters.change_orders)} change orders` : 'all costs tagged Dumpsters'}
+          tint="hsl(24 60% 55%)" />
+        <StatTile icon={Users} label="Payroll" value={money(t.payroll)} sub="own + staffing" tint="hsl(44 66% 50%)" />
         <StatTile icon={Clock} label="Electrical man hours" value={fmtHrs(tr.elec?.hours)}
           sub={`${fmtHrs(tr.elec?.own_hours)} own + ${fmtHrs(tr.elec?.staff_hours)} staffing`} tint="hsl(44 66% 50%)" />
         <StatTile icon={Clock} label="Mechanical man hours" value={fmtHrs(tr.mech?.hours)}
@@ -661,7 +671,7 @@ function ChangeOrders({ project: p, editable, onAddCO, onSaveCO, onDelCO }) {
         <div className="flex items-center gap-2">
           <FileText className="w-4 h-4 text-muted-foreground" />
           <span className="text-sm font-semibold">Change Orders</span>
-          <span className="text-xs text-muted-foreground">(adds to its trade's budget · Safety and untagged add to the overall budget)</span>
+          <span className="text-xs text-muted-foreground">(adds to its trade's budget · Safety, Dumpsters and untagged add to the overall budget)</span>
         </div>
         <div className="flex items-center gap-4 text-xs">
           <span className="text-muted-foreground">Man hrs <span className="font-semibold text-foreground tabular-nums">{t.man_hours || 0}</span></span>
@@ -808,7 +818,7 @@ function RentalModal({ project, rentalTypes, onAddType, onClose, onSaved }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="w-full max-w-lg rounded-2xl bg-card border border-border shadow-xl p-5 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <h2 className="text-lg font-bold mb-1 flex items-center gap-2"><Truck className="w-5 h-5" /> Add Rental — {project.name}</h2>
-        <p className="text-xs text-muted-foreground mb-4">Cost counts toward Equipment Rental spend and the chosen trade (Safety is totalled as its own category).</p>
+        <p className="text-xs text-muted-foreground mb-4">Cost counts toward Equipment Rental spend and the chosen trade (Safety and Dumpsters are totalled as their own categories).</p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {field('Equipment', (
             <div className="flex gap-2">
@@ -820,7 +830,7 @@ function RentalModal({ project, rentalTypes, onAddType, onClose, onSaved }) {
           ))}
           {field('Mechanical / Electrical', (
             <select value={f.trade} onChange={(e) => setF((s) => ({ ...s, trade: e.target.value }))} className={inputCls}>
-              <option>Mechanical</option><option>Electrical</option><option>Safety</option>
+              <option>Mechanical</option><option>Electrical</option><option>Safety</option><option>Dumpsters</option>
             </select>
           ))}
           {field('Serial number', <input value={f.serial_number} onChange={(e) => setF((s) => ({ ...s, serial_number: e.target.value }))} className={inputCls} />)}

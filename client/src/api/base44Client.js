@@ -269,6 +269,8 @@ const expenses = {
   updateItem: (id, data) => request('PUT', `/expenses/items/${id}`, { body: data }),
   deleteItem: (id) => request('DELETE', `/expenses/items/${id}`),
   importWeeks: (project_id, rows) => request('POST', '/expenses/import', { body: { project_id, rows } }),
+  importLines: (project_id, { category, trade, lines }) =>
+    request('POST', '/expenses/import-lines', { body: { project_id, category, trade, lines } }),
   mergeWeeks: (project_id, dry_run) => request('POST', `/expenses/projects/${project_id}/merge-weeks`, { body: { dry_run: !!dry_run } }),
   addChangeOrder: (data) => request('POST', '/expenses/change-orders', { body: data }),
   updateChangeOrder: (id, data) => request('PUT', `/expenses/change-orders/${id}`, { body: data }),

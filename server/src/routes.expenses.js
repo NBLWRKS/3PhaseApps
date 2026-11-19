@@ -15,18 +15,19 @@ const id = () => crypto.randomBytes(12).toString('hex');
 const now = () => new Date().toISOString();
 const num = (v) => { const n = Number(v); return isNaN(n) ? 0 : n; };
 
-// Trade of a cost: 'Electrical' | 'Mechanical' | 'Safety' | null (unassigned).
-// Safety is its own category: Safety costs are totalled together and are not
-// part of the Electrical or Mechanical spend or budget.
+// Trade of a cost: 'Electrical' | 'Mechanical' | 'Safety' | 'Dumpsters' | null
+// (unassigned). Safety and Dumpsters are each their own category: their costs are
+// totalled separately and are not part of the Electrical or Mechanical spend or budget.
 function normTrade(v) {
   const s = String(v ?? '').trim().toLowerCase();
   if (!s) return null;
   if (s.startsWith('e')) return 'Electrical';
   if (s.startsWith('m')) return 'Mechanical';
   if (s.startsWith('s')) return 'Safety';
+  if (s.startsWith('d')) return 'Dumpsters';
   return null;
 }
-// Add an amount to a per-trade tally (Electrical, Mechanical, Safety or Unassigned).
+// Add an amount to a per-trade tally (Electrical, Mechanical, Safety, Dumpsters or Unassigned).
 function addToTrade(tally, trade, amount) {
   tally[trade || 'Unassigned'] += amount;
 }
@@ -123,7 +124,7 @@ function buildSummary(projectId) {
     const catSpend = (label, sp) => ({ label, spend: sp });
 
     // ---- Per-trade spend: payroll + staffing + materials + trade-tagged lines/rentals ----
-    const tradeSpend = { Electrical: elecPay + staffElecPay, Mechanical: mechPay + staffMechPay, Safety: 0, Unassigned: 0 };
+    const tradeSpend = { Electrical: elecPay + staffElecPay, Mechanical: mechPay + staffMechPay, Safety: 0, Dumpsters: 0, Unassigned: 0 };
     for (const w of weekOut) for (const it of w.items) addToTrade(tradeSpend, itemTrade(it), num(it.amount));
     for (const r of rentalRows) addToTrade(tradeSpend, normTrade(r.trade), num(r.cost));
 
@@ -136,9 +137,9 @@ function buildSummary(projectId) {
       total: coRows.reduce((s, c) => s + num(c.total), 0),
     };
     // Budgets are set per trade. Change orders raise the budget of their trade
-    // (Safety and unassigned COs raise only the overall budget). Projects created before the
+    // (Safety, Dumpsters and unassigned COs raise only the overall budget). Projects created before the
     // split keep their single overall budget until both trade budgets are entered.
-    const coByTrade = { Electrical: 0, Mechanical: 0, Safety: 0, Unassigned: 0 };
+    const coByTrade = { Electrical: 0, Mechanical: 0, Safety: 0, Dumpsters: 0, Unassigned: 0 };
     for (const c of coRows) addToTrade(coByTrade, normTrade(c.trade), num(c.total));
     const baseElec = num(p.budget_elec), baseMech = num(p.budget_mech);
     const splitNeeded = baseElec === 0 && baseMech === 0 && num(p.budget_total) > 0;
@@ -163,6 +164,7 @@ function buildSummary(projectId) {
       elec: tradeBlock('Electrical', baseElec, elecHoursOwn, elecHoursStaff, elecPay + staffElecPay),
       mech: tradeBlock('Mechanical', baseMech, mechHoursOwn, mechHoursStaff, mechPay + staffMechPay),
       safety: { spend: tradeSpend.Safety, change_orders: coByTrade.Safety },
+      dumpsters: { spend: tradeSpend.Dumpsters, change_orders: coByTrade.Dumpsters },
       unassigned: { spend: tradeSpend.Unassigned, change_orders: coByTrade.Unassigned },
       budget_split_needed: splitNeeded,
     };
@@ -443,6 +445,49 @@ router.post('/import', appEditRequired('expenses'), (req, res) => {
   });
   tx();
   res.json({ ok: true, weeks_created: created, weeks_updated: updated });
+});
+
+// ===== Import expense lines: individual charges (e.g. a QuickBooks export) =====
+// Body: { project_id, category, trade, lines: [{ week_ending, amount, description }] }
+// The client groups charges into weeks and sends one line per week. Each line
+// goes into the project's week within SAME_WEEK_DAYS of week_ending (a new week
+// is created if there's none). A line identical to one already in that week
+// (same category, trade, amount and description) is skipped, so importing the
+// same file twice doesn't double-count.
+router.post('/import-lines', appEditRequired('expenses'), (req, res) => {
+  const b = req.body || {};
+  const project_id = b.project_id;
+  const category = String(b.category || '').trim();
+  const trade = normTrade(b.trade);
+  const lines = Array.isArray(b.lines) ? b.lines : [];
+  if (!project_id || !category) return res.status(400).json({ error: 'project_id and category required' });
+  if (!db.prepare('SELECT id FROM expense_projects WHERE id = ?').get(project_id)) return res.status(400).json({ error: 'Invalid project' });
+  if (!lines.length) return res.status(400).json({ error: 'No lines to import' });
+  if (lines.length > 500) return res.status(400).json({ error: 'Too many lines (500 max)' });
+  const bad = lines.find((l) => dayNum(normDate(l?.week_ending)) == null || !Number.isFinite(Number(l?.amount)));
+  if (bad) return res.status(400).json({ error: 'Every line needs a YYYY-MM-DD week_ending and a numeric amount' });
+
+  const insertItem = db.prepare(`INSERT INTO expense_items (id,week_id,category,description,amount,trade,sort_order,created_date,updated_date)
+    VALUES (@id,@week_id,@category,@description,@amount,@trade,@sort_order,@created_date,@updated_date)`);
+  const result = { lines_added: 0, lines_skipped: 0, weeks_created: 0, amount_added: 0 };
+  db.transaction(() => {
+    for (const l of lines) {
+      const we = normDate(l.week_ending);
+      const amount = Math.round(Number(l.amount) * 100) / 100;
+      const description = String(l.description || '').trim().slice(0, 300) || null;
+      let week = findSameWeek(project_id, we);
+      if (!week) { week = insertWeek(project_id, { week_ending: we }, req.user?.email); result.weeks_created++; }
+      const dup = db.prepare('SELECT id FROM expense_items WHERE week_id = ? AND category = ? AND IFNULL(trade, \'\') = ? AND ROUND(amount, 2) = ? AND IFNULL(description, \'\') = ?')
+        .get(week.id, category, trade || '', amount, description || '');
+      if (dup) { result.lines_skipped++; continue; }
+      const mx = db.prepare('SELECT MAX(sort_order) AS m FROM expense_items WHERE week_id = ?').get(week.id);
+      insertItem.run({ id: id(), week_id: week.id, category, description, amount, trade,
+        sort_order: (mx && mx.m != null ? mx.m : -1) + 1, created_date: now(), updated_date: now() });
+      result.lines_added++; result.amount_added += amount;
+    }
+  })();
+  result.amount_added = Math.round(result.amount_added * 100) / 100;
+  res.json({ ok: true, ...result });
 });
 
 // ===== Expense line items =====

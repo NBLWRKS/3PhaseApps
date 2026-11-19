@@ -5,9 +5,11 @@
 // Columns are the entered totals:
 //   Electrical Payroll  = own electrical payroll + electrical staffing
 //   Electrical Materials, Mechanical Payroll (own + staffing), Mechanical Materials
-//   Safety              = every expense line and rental tagged Safety, whatever its
-//                         category (Safety is its own category, not part of a trade)
-//   Equipment Rentals   = "Equipment Rental" expense lines + the Rentals log (not Safety)
+//   Safety, Dumpsters   = every expense line and rental tagged with that trade,
+//                         whatever its category (each is its own category, not part
+//                         of Electrical or Mechanical)
+//   Equipment Rentals   = "Equipment Rental" expense lines + the Rentals log (not
+//                         Safety or Dumpsters)
 //   Other, then one column per custom expense category that has entries.
 // The grand total equals the project's Total spend.
 import { buildXlsx, downloadBlob, excelDate, XS } from '@/lib/xlsx';
@@ -17,8 +19,12 @@ const round2 = (n) => Math.round(n * 100) / 100;
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 // Materials lines carry their trade in the category; others in their trade field.
 const MATERIALS = new Set(['Materials – Electrical', 'Materials – Mechanical']);
-const isSafety = (trade) => /^s/i.test(String(trade || '').trim());
-const isSafetyItem = (it) => !MATERIALS.has(it.category) && isSafety(it.trade);
+// Trades that are their own column (same first-letter rule as the server's normTrade).
+const ownColumn = (trade) => {
+  const s = String(trade || '').trim().toLowerCase();
+  return s.startsWith('s') ? 'safety' : s.startsWith('d') ? 'dumpsters' : null;
+};
+const itemOwnColumn = (it) => (MATERIALS.has(it.category) ? null : ownColumn(it.trade));
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const FIXED = [
@@ -27,6 +33,7 @@ const FIXED = [
   { key: 'mech_payroll', label: 'Mechanical Payroll (incl. Staffing)' },
   { key: 'mech_materials', label: 'Mechanical Materials' },
   { key: 'safety', label: 'Safety' },
+  { key: 'dumpsters', label: 'Dumpsters' },
   { key: 'rentals', label: 'Equipment Rentals' },
   { key: 'other', label: 'Other' },
 ];
@@ -62,7 +69,7 @@ const addDays = (iso, n) => {
 export function buildCostBreakdown(p, period = 'week') {
   const weeks = [...(p?.weeks || [])].sort((a, b) => String(a.week_ending).localeCompare(String(b.week_ending)));
   const custom = new Set();
-  for (const w of weeks) for (const it of w.items || []) if (!isSafetyItem(it) && !CATEGORY_KEY.has(it.category)) custom.add(it.category || 'Uncategorized');
+  for (const w of weeks) for (const it of w.items || []) if (!itemOwnColumn(it) && !CATEGORY_KEY.has(it.category)) custom.add(it.category || 'Uncategorized');
   const customCols = [...custom].sort().map((c) => ({ key: `cat:${c}`, label: c }));
   const columns = [...FIXED, ...customCols];
 
@@ -86,7 +93,7 @@ export function buildCostBreakdown(p, period = 'week') {
     r.values.elec_payroll += num(w.elec_pay) + num(w.staff_elec_pay);
     r.values.mech_payroll += num(w.mech_pay) + num(w.staff_mech_pay);
     for (const it of w.items || []) {
-      const k = isSafetyItem(it) ? 'safety' : (CATEGORY_KEY.get(it.category) || `cat:${it.category || 'Uncategorized'}`);
+      const k = itemOwnColumn(it) || CATEGORY_KEY.get(it.category) || `cat:${it.category || 'Uncategorized'}`;
       r.values[k] += num(it.amount);
     }
   }
@@ -108,7 +115,7 @@ export function buildCostBreakdown(p, period = 'week') {
       if (w) { const pr = periodOf(w.week_ending); r = rowFor(pr.key, pr.label, pr.date, pr.sort); }
       else r = rowFor(`rent:${d}`, `Rental delivered ${MONTHS[+d.slice(5, 7) - 1]} ${+d.slice(8)}, ${d.slice(0, 4)} (no week logged)`, null, `${d}~`);
     }
-    r.values[isSafety(rent.trade) ? 'safety' : 'rentals'] += cost;
+    r.values[ownColumn(rent.trade) || 'rentals'] += cost;
   }
 
   // Add up the unrounded amounts and round only what's shown, so the totals
@@ -137,7 +144,7 @@ export function exportCostBreakdownXlsx(p, period = 'week') {
   const header = [period === 'month' ? 'Month' : 'Week ending', ...b.columns.map((c) => c.label), 'Total'];
   const rows = [
     [{ v: `${p.name} — ${periodName} cost breakdown`, s: XS.title }],
-    [`Exported ${todayIso} from 3PhaseApps Expense Tracking. Payroll columns include staffing; Safety is every cost tagged Safety; Equipment Rentals includes the Rentals log.`],
+    [`Exported ${todayIso} from 3PhaseApps Expense Tracking. Payroll columns include staffing; Safety and Dumpsters are every cost tagged with that trade; Equipment Rentals includes the Rentals log.`],
     [],
     header.map((h) => ({ v: h, s: XS.bold })),
     ...b.rows.map((r) => {
