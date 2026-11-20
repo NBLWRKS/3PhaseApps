@@ -316,32 +316,6 @@ db.exec(`
     updated_date TEXT NOT NULL
   );
 `);
-ensureColumn('portals', 'hidden_columns', "TEXT NOT NULL DEFAULT '{}'"); // { sectionTitle: [column labels hidden from customers] }
-db.exec(`
-  CREATE TABLE IF NOT EXISTS portal_documents (
-    id TEXT PRIMARY KEY,
-    portal_id TEXT NOT NULL,
-    kind TEXT NOT NULL DEFAULT 'document',  -- 'document' | 'schedule' | 'workbook'
-    name TEXT NOT NULL,                      -- original file name, shown in the list
-    stored_file TEXT NOT NULL,               -- under uploads/portal/<portal_id>/
-    size INTEGER,
-    uploaded_by TEXT,
-    uploaded_date TEXT NOT NULL
-  );
-  -- Customer Notes: comments customers (and our editors) leave on a portal.
-  CREATE TABLE IF NOT EXISTS portal_notes (
-    id TEXT PRIMARY KEY,
-    portal_id TEXT NOT NULL,
-    topic TEXT,                              -- optional, e.g. a change order it's about
-    body TEXT NOT NULL,
-    author_id TEXT NOT NULL,
-    author_name TEXT,
-    author_kind TEXT NOT NULL,               -- 'customer' | 'internal'
-    created_date TEXT NOT NULL,
-    updated_date TEXT
-  );
-  CREATE INDEX IF NOT EXISTS idx_portal_notes_portal ON portal_notes(portal_id, created_date);
-`);
 ensureColumn('highlights', 'updated_by', 'TEXT');
 ensureColumn('highlights', 'pages', "TEXT NOT NULL DEFAULT '[]'");
 ensureColumn('highlights', 'project', 'TEXT');

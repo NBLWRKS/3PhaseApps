@@ -146,26 +146,6 @@ const portal = {
   addLogin: (id, data) => request('POST', `/portal/${id}/customers`, { body: data }),
   resetLogin: (id, uid, password) => request('POST', `/portal/${id}/customers/${uid}/password`, { body: { password } }),
   removeLogin: (id, uid) => request('DELETE', `/portal/${id}/customers/${uid}`),
-  listDocs: (id) => request('GET', `/portal/${id}/documents`),
-  uploadDoc: (id, file, kind, name) => {
-    const fd = new FormData();
-    fd.append('kind', kind || 'document');
-    if (name) fd.append('name', name);
-    fd.append('file', file);
-    return request('POST', `/portal/${id}/documents`, { body: fd, isForm: true });
-  },
-  deleteDoc: (id, docId) => request('DELETE', `/portal/${id}/documents/${docId}`),
-  listNotes: (id) => request('GET', `/portal/${id}/notes`),
-  addNote: (id, data) => request('POST', `/portal/${id}/notes`, { body: data }),
-  updateNote: (id, noteId, data) => request('PUT', `/portal/${id}/notes/${noteId}`, { body: data }),
-  deleteNote: (id, noteId) => request('DELETE', `/portal/${id}/notes/${noteId}`),
-  // The file's bytes (sent with the sign-in token, so it can't be a plain link).
-  fetchDoc: async (id, docId) => {
-    const token = getToken();
-    const res = await fetch(`${API_BASE}/portal/${id}/documents/${docId}/file`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
-    if (!res.ok) { const err = new Error(res.status === 404 ? 'That document is no longer available.' : 'Couldn\'t open the document'); err.status = res.status; throw err; }
-    return { data: await res.arrayBuffer(), type: res.headers.get('content-type') || '' };
-  },
 };
 
 // Highlight app: convert PDFs to PNG and manage highlighted conveyor docs.

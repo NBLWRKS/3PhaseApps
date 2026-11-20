@@ -35,7 +35,6 @@ import ApplyPacket from '@/pages/ApplyPacket';
 import PortalLogin from '@/pages/PortalLogin';
 import PortalHome from '@/pages/PortalHome';
 import Portal from '@/pages/Portal';
-import PortalBeta from '@/pages/PortalBeta';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, user } = useAuth();
@@ -108,8 +107,6 @@ const AuthenticatedApp = () => {
         <Route path="/onboarding-admin" element={<OnboardingAdmin />} />
         <Route path="/portal" element={<PortalHome />} />
         <Route path="/portal/:id" element={<Portal />} />
-        {/* New dashboard, in testing. Only staff are shown a link to it. */}
-        <Route path="/portal/:id/beta" element={<PortalBeta />} />
         <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
           <Route element={<AppLayout />}>
             <Route path="/reports" element={<Dashboard />} />

@@ -11,13 +11,9 @@
 //     and delete portals.
 import express from 'express';
 import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
-import multer from 'multer';
 import db from './db.js';
 import { authRequired, hashPassword } from './auth.js';
 import { hasAppLevel } from './apps.js';
-import { uploadDir } from './routes.uploads.js';
 
 const router = express.Router();
 const id = () => crypto.randomBytes(12).toString('hex');
@@ -33,43 +29,8 @@ const canView = (u, p) => !!p && (isCustomer(u) ? u.portal_id === p.id : interna
 function rowToPortal(row) {
   if (!row) return null;
   let sections = [];
-  let hidden_columns = {};
   try { sections = JSON.parse(row.sections || '[]'); } catch { sections = []; }
-  try { hidden_columns = JSON.parse(row.hidden_columns || '{}') || {}; } catch { hidden_columns = {}; }
-  return { ...row, sections, hidden_columns };
-}
-
-// Columns hidden from customers, per section title (labels compared ignoring
-// case). The server removes them from what a customer receives, so they never
-// reach the customer's browser.
-const norm = (s) => String(s || '').trim().toLowerCase();
-function withoutHidden(sections, hidden) {
-  return sections.map((s) => {
-    const h = new Set((hidden[s.title] || []).map(norm));
-    if (!h.size) return s;
-    const keep = s.columns.map((c, i) => (h.has(norm(c.label)) ? -1 : i)).filter((i) => i >= 0);
-    return { ...s, columns: keep.map((i) => s.columns[i]), rows: s.rows.map((r) => ({ ...r, cells: keep.map((i) => r.cells[i] ?? null) })) };
-  });
-}
-// Default for a newly uploaded Scope of Work sheet: hide our internal invoicing
-// columns (invoice in process, amount, 4% Net30, final amount, after-invoice balances).
-const INTERNAL_SOW = /invoice in process|^amount$|net\s*30|final amount|after invoice/i;
-function defaultHidden(sections, hidden) {
-  const out = { ...hidden };
-  for (const s of sections) {
-    if (out[s.title] !== undefined || !/sow|scope/i.test(`${s.title} ${s.subtitle || ''}`)) continue;
-    out[s.title] = s.columns.map((c) => c.label).filter((l) => INTERNAL_SOW.test(l));
-  }
-  return out;
-}
-function cleanHidden(input) {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
-  const out = {};
-  for (const [k, v] of Object.entries(input).slice(0, 40)) {
-    if (!Array.isArray(v)) return null;
-    out[String(k).slice(0, 200)] = v.slice(0, 60).map((x) => String(x).slice(0, 200));
-  }
-  return out;
+  return { ...row, sections };
 }
 const getPortal = (pid) => rowToPortal(db.prepare('SELECT * FROM portals WHERE id = ?').get(pid));
 
@@ -118,11 +79,8 @@ router.get('/:id', (req, res) => {
   const p = getPortal(req.params.id);
   if (!canView(req.user, p)) return res.status(404).json({ error: 'Portal not found' });
   const canEdit = internalLevel(req.user, 'edit');
-  if (isCustomer(req.user)) {
-    // Customers don't get hidden columns, the hidden list, or who on our side updated it.
-    p.sections = withoutHidden(p.sections, p.hidden_columns);
-    delete p.hidden_columns; delete p.updated_by; delete p.created_by;
-  }
+  // Customers don't need to know who on our side updated it.
+  if (isCustomer(req.user)) { delete p.updated_by; delete p.created_by; }
   res.json({ ...p, can_edit: canEdit, can_manage_logins: isAdmin(req.user) });
 });
 
@@ -152,18 +110,11 @@ router.put('/:id', (req, res) => {
     sections = cleanSections(b.sections);
     if (!sections) return res.status(400).json({ error: 'The portal content is not in the expected format' });
   }
-  let hidden = p.hidden_columns;
-  if (b.hidden_columns !== undefined) {
-    hidden = cleanHidden(b.hidden_columns);
-    if (!hidden) return res.status(400).json({ error: 'Hidden columns are not in the expected format' });
-  }
-  // Only the new dashboard (in testing) asks for the default hidden SOW columns.
-  if (b.sections !== undefined && b.default_hidden === true) hidden = defaultHidden(sections, hidden);
   const name = b.name != null ? String(b.name).trim().slice(0, 200) || p.name : p.name;
   const customer = b.customer !== undefined ? (String(b.customer || '').trim().slice(0, 200) || null) : p.customer;
   const source_file = b.source_file !== undefined ? (String(b.source_file || '').slice(0, 300) || null) : p.source_file;
-  db.prepare('UPDATE portals SET name=?, customer=?, sections=?, hidden_columns=?, source_file=?, updated_by=?, updated_date=? WHERE id=?')
-    .run(name, customer, JSON.stringify(sections), JSON.stringify(hidden), source_file, req.user.email, now(), p.id);
+  db.prepare('UPDATE portals SET name=?, customer=?, sections=?, source_file=?, updated_by=?, updated_date=? WHERE id=?')
+    .run(name, customer, JSON.stringify(sections), source_file, req.user.email, now(), p.id);
   res.json(getPortal(p.id));
 });
 
@@ -174,161 +125,8 @@ router.delete('/:id', (req, res) => {
   if (!p) return res.status(404).json({ error: 'Portal not found' });
   db.transaction(() => {
     for (const u of db.prepare("SELECT id, email FROM users WHERE role = 'customer' AND portal_id = ?").all(p.id)) removeLogin(u, req.user.email);
-    db.prepare('DELETE FROM portal_documents WHERE portal_id = ?').run(p.id);
-    db.prepare('DELETE FROM portal_notes WHERE portal_id = ?').run(p.id);
     db.prepare('DELETE FROM portals WHERE id = ?').run(p.id);
   })();
-  try { fs.rmSync(docDir(p.id), { recursive: true, force: true }); } catch { /* ignore */ }
-  res.json({ ok: true });
-});
-
-// ===== Customer Notes =====
-// A running list of notes on the portal. That portal's customer logins and our
-// editors can write; internal read-only users can read. Authors edit their own
-// notes; authors and our editors can delete. Customers see our people as
-// "3 Phase Conveyor" unless they have a name on their account.
-const canWriteNotes = (u, p) => !!p && (isCustomer(u) ? u.portal_id === p.id : internalLevel(u, 'edit'));
-function noteOut(n, u, p) {
-  const mine = n.author_id === u.id;
-  return {
-    id: n.id, topic: n.topic || '', body: n.body, author_kind: n.author_kind,
-    author_name: n.author_name || (n.author_kind === 'internal' ? '3 Phase Conveyor' : 'Customer'),
-    created_date: n.created_date, updated_date: n.updated_date || null,
-    mine, can_delete: mine || (!isCustomer(u) && internalLevel(u, 'edit')),
-    can_edit: mine && canWriteNotes(u, p),
-  };
-}
-function noteInput(b) {
-  const body = String(b?.body ?? '').trim();
-  if (!body) return { error: 'Write a note first' };
-  if (body.length > 5000) return { error: 'Notes are limited to 5,000 characters' };
-  return { body, topic: String(b?.topic ?? '').trim().slice(0, 200) || null };
-}
-const authorName = (u) => (u.full_name && String(u.full_name).trim()) || (isCustomer(u) ? u.email : null);
-
-// GET /api/portal/:id/notes -> newest first
-router.get('/:id/notes', (req, res) => {
-  const p = getPortal(req.params.id);
-  if (!canView(req.user, p)) return res.status(404).json({ error: 'Portal not found' });
-  const rows = db.prepare('SELECT * FROM portal_notes WHERE portal_id = ? ORDER BY created_date DESC').all(p.id);
-  res.json({ can_write: canWriteNotes(req.user, p), notes: rows.map((n) => noteOut(n, req.user, p)) });
-});
-
-// POST /api/portal/:id/notes {body, topic?}
-router.post('/:id/notes', (req, res) => {
-  const p = getPortal(req.params.id);
-  if (!canView(req.user, p)) return res.status(404).json({ error: 'Portal not found' });
-  if (!canWriteNotes(req.user, p)) return res.status(403).json({ error: 'You have read-only access to these notes' });
-  const v = noteInput(req.body);
-  if (v.error) return res.status(400).json({ error: v.error });
-  const n = {
-    id: id(), portal_id: p.id, topic: v.topic, body: v.body, author_id: req.user.id,
-    author_name: authorName(req.user), author_kind: isCustomer(req.user) ? 'customer' : 'internal', created_date: now(),
-  };
-  db.prepare(`INSERT INTO portal_notes (id, portal_id, topic, body, author_id, author_name, author_kind, created_date)
-    VALUES (@id, @portal_id, @topic, @body, @author_id, @author_name, @author_kind, @created_date)`).run(n);
-  res.json(noteOut(n, req.user, p));
-});
-
-// PUT /api/portal/:id/notes/:noteId {body, topic?}  (author only)
-router.put('/:id/notes/:noteId', (req, res) => {
-  const p = getPortal(req.params.id);
-  if (!canView(req.user, p)) return res.status(404).json({ error: 'Portal not found' });
-  const n = db.prepare('SELECT * FROM portal_notes WHERE id = ? AND portal_id = ?').get(req.params.noteId, p.id);
-  if (!n) return res.status(404).json({ error: 'Note not found' });
-  if (n.author_id !== req.user.id || !canWriteNotes(req.user, p)) return res.status(403).json({ error: 'You can only edit your own notes' });
-  const v = noteInput(req.body);
-  if (v.error) return res.status(400).json({ error: v.error });
-  const updated = now();
-  db.prepare('UPDATE portal_notes SET body = ?, topic = ?, updated_date = ? WHERE id = ?').run(v.body, v.topic, updated, n.id);
-  res.json(noteOut({ ...n, body: v.body, topic: v.topic, updated_date: updated }, req.user, p));
-});
-
-// DELETE /api/portal/:id/notes/:noteId  (author, or our editors)
-router.delete('/:id/notes/:noteId', (req, res) => {
-  const p = getPortal(req.params.id);
-  if (!canView(req.user, p)) return res.status(404).json({ error: 'Portal not found' });
-  const n = db.prepare('SELECT * FROM portal_notes WHERE id = ? AND portal_id = ?').get(req.params.noteId, p.id);
-  if (!n) return res.status(404).json({ error: 'Note not found' });
-  if (!noteOut(n, req.user, p).can_delete) return res.status(403).json({ error: 'You can only delete your own notes' });
-  db.prepare('DELETE FROM portal_notes WHERE id = ?').run(n.id);
-  res.json({ ok: true });
-});
-
-// ===== Documents (schedules, the workbook, anything shared with the customer) =====
-// Stored under uploads/portal/<portal id>/, which /uploads never serves; they're
-// only downloadable here, by that portal's customers and internal users.
-const docDir = (pid) => path.join(uploadDir, 'portal', pid.replace(/[^a-zA-Z0-9]/g, ''));
-const DOC_EXT = {
-  '.pdf': 'application/pdf', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  '.xls': 'application/vnd.ms-excel', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  '.doc': 'application/msword', '.csv': 'text/csv', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
-};
-const DOC_KINDS = new Set(['document', 'schedule', 'workbook']);
-const docUpload = multer({
-  storage: multer.diskStorage({
-    destination: (req, _file, cb) => { const d = docDir(req.params.id); fs.mkdirSync(d, { recursive: true }); cb(null, d); },
-    filename: (_req, file, cb) => cb(null, `${id()}${path.extname(file.originalname || '').toLowerCase()}`),
-  }),
-  limits: { fileSize: 50 * 1024 * 1024, files: 1 },
-  fileFilter: (_req, file, cb) => cb(null, !!DOC_EXT[path.extname(file.originalname || '').toLowerCase()]),
-});
-const docRow = (d) => ({ id: d.id, kind: d.kind, name: d.name, size: d.size, uploaded_date: d.uploaded_date });
-
-// GET /api/portal/:id/documents -> newest first
-router.get('/:id/documents', (req, res) => {
-  const p = getPortal(req.params.id);
-  if (!canView(req.user, p)) return res.status(404).json({ error: 'Portal not found' });
-  const rows = db.prepare('SELECT * FROM portal_documents WHERE portal_id = ? ORDER BY uploaded_date DESC').all(p.id);
-  res.json(rows.map((d) => (isCustomer(req.user) ? docRow(d) : { ...docRow(d), uploaded_by: d.uploaded_by })));
-});
-
-// GET /api/portal/:id/documents/:docId/file  (?download=1 to save instead of view)
-router.get('/:id/documents/:docId/file', (req, res) => {
-  const p = getPortal(req.params.id);
-  if (!canView(req.user, p)) return res.status(404).json({ error: 'Portal not found' });
-  const d = db.prepare('SELECT * FROM portal_documents WHERE id = ? AND portal_id = ?').get(req.params.docId, p.id);
-  if (!d) return res.status(404).json({ error: 'Document not found' });
-  const full = path.join(docDir(p.id), path.basename(d.stored_file));
-  if (!fs.existsSync(full)) return res.status(404).json({ error: 'File missing' });
-  const ext = path.extname(d.stored_file).toLowerCase();
-  const inline = !req.query.download && (ext === '.pdf' || ext === '.png' || ext === '.jpg' || ext === '.jpeg');
-  res.setHeader('Content-Type', DOC_EXT[ext] || 'application/octet-stream');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Content-Disposition', `${inline ? 'inline' : 'attachment'}; filename="${d.name.replace(/[^\w.\- ()]/g, '_')}"`);
-  fs.createReadStream(full).pipe(res);
-});
-
-// POST /api/portal/:id/documents  multipart: file, kind, name?  (edit access)
-router.post('/:id/documents', (req, res, next) => {
-  const p = getPortal(req.params.id);
-  if (!p || isCustomer(req.user) || !internalLevel(req.user, 'read')) return res.status(404).json({ error: 'Portal not found' });
-  if (!internalLevel(req.user, 'edit')) return res.status(403).json({ error: 'You have read-only access to the Customer Portal' });
-  next();
-}, (req, res, next) => docUpload.single('file')(req, res, (err) => (err
-  ? res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'That file is over 50 MB.' : 'Upload failed' })
-  : next())), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'Choose a PDF, Excel, Word, CSV or image file (50 MB max).' });
-  const kind = DOC_KINDS.has(req.body?.kind) ? req.body.kind : 'document';
-  const row = {
-    id: id(), portal_id: req.params.id, kind,
-    name: String(req.body?.name || req.file.originalname || 'Document').trim().slice(0, 200),
-    stored_file: req.file.filename, size: req.file.size, uploaded_by: req.user.email, uploaded_date: now(),
-  };
-  db.prepare(`INSERT INTO portal_documents (id, portal_id, kind, name, stored_file, size, uploaded_by, uploaded_date)
-    VALUES (@id, @portal_id, @kind, @name, @stored_file, @size, @uploaded_by, @uploaded_date)`).run(row);
-  res.json({ ...docRow(row), uploaded_by: row.uploaded_by });
-});
-
-// DELETE /api/portal/:id/documents/:docId  (edit access)
-router.delete('/:id/documents/:docId', (req, res) => {
-  const p = getPortal(req.params.id);
-  if (!p || isCustomer(req.user) || !internalLevel(req.user, 'read')) return res.status(404).json({ error: 'Portal not found' });
-  if (!internalLevel(req.user, 'edit')) return res.status(403).json({ error: 'You have read-only access to the Customer Portal' });
-  const d = db.prepare('SELECT * FROM portal_documents WHERE id = ? AND portal_id = ?').get(req.params.docId, p.id);
-  if (!d) return res.status(404).json({ error: 'Document not found' });
-  try { fs.unlinkSync(path.join(docDir(p.id), path.basename(d.stored_file))); } catch { /* already gone */ }
-  db.prepare('DELETE FROM portal_documents WHERE id = ?').run(d.id);
   res.json({ ok: true });
 });
 

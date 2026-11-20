@@ -317,10 +317,7 @@ export default function Portal() {
   ) : (
     <header className="sticky top-0 z-40 bg-card/80 backdrop-blur border-b border-border">
       <div className="max-w-[1680px] mx-auto px-4 sm:px-5 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link to="/portal" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="w-4 h-4" aria-hidden="true" /> All portals</Link>
-          <Link to={`/portal/${id}/beta`} className="text-xs font-medium text-primary hover:underline">Try the new dashboard (testing)</Link>
-        </div>
+        <Link to="/portal" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"><ArrowLeft className="w-4 h-4" aria-hidden="true" /> All portals</Link>
         <AppSwitcher currentKey="portal" />
       </div>
     </header>
