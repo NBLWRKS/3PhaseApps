@@ -4,6 +4,7 @@ import {
   ArrowLeft, Building2, FileSpreadsheet, Loader2, LogOut, KeyRound, UserX, UserPlus, Copy, Pencil, Trash2,
   Menu, LayoutDashboard, FileDiff, ClipboardList, Receipt, CalendarRange, FolderOpen, Table2, Settings2,
   Search, Download, Eye, Upload, FileText, FileImage, File as FileIcon, ChevronRight, EyeOff,
+  MessageSquareText, Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { base44 } from '@/api/base44Client';
@@ -521,6 +522,118 @@ function Schedule({ portal, docs, reloadDocs }) {
   );
 }
 
+// ===================== Customer notes =====================
+const fmtWhen = (iso) => { try { return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch { return ''; } };
+
+function NoteForm({ initial, topics, onSubmit, onCancel, submitLabel }) {
+  const [body, setBody] = useState(initial?.body || '');
+  const [topic, setTopic] = useState(initial?.topic || '');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (initial?.topic !== undefined) setTopic(initial.topic || ''); }, [initial?.topic]);
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!body.trim()) return;
+    setBusy(true);
+    const ok = await onSubmit({ body: body.trim(), topic });
+    setBusy(false);
+    if (ok && !initial?.id) { setBody(''); setTopic(''); }
+  };
+  const opts = topic && !topics.includes(topic) ? [topic, ...topics] : topics;
+  return (
+    <form onSubmit={submit} className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <label htmlFor={`topic-${initial?.id || 'new'}`} className="text-xs font-medium text-muted-foreground">Regarding</label>
+        <select id={`topic-${initial?.id || 'new'}`} value={topic} onChange={(e) => setTopic(e.target.value)} className="px-2.5 py-1.5 rounded-lg border border-border bg-background text-sm max-w-full sm:max-w-md">
+          <option value="">General</option>
+          {opts.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+      <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={initial?.id ? 4 : 3} maxLength={5000}
+        aria-label="Note" placeholder="Add a note, question or comment for the 3 Phase Conveyor team…" className={`${inputCls} resize-y min-h-[5rem]`} />
+      <div className="flex items-center justify-end gap-2">
+        {onCancel && <button type="button" onClick={onCancel} className={btn}>Cancel</button>}
+        <button type="submit" disabled={busy || !body.trim()} className={btnPrimary}>
+          {busy ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Send className="w-4 h-4" aria-hidden="true" />} {submitLabel}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function Notes({ portal, notes, reloadNotes, topics, initialTopic, clearTopic }) {
+  const [editing, setEditing] = useState(null);
+  const [filter, setFilter] = useState('');
+  const add = async (data) => {
+    try { await base44.portal.addNote(portal.id, data); toast.success('Note added'); clearTopic(); reloadNotes(); return true; }
+    catch (err) { toast.error(err.message || 'Couldn\'t save the note'); return false; }
+  };
+  const save = (n) => async (data) => {
+    try { await base44.portal.updateNote(portal.id, n.id, data); toast.success('Note updated'); setEditing(null); reloadNotes(); return true; }
+    catch (err) { toast.error(err.message || 'Couldn\'t save the note'); return false; }
+  };
+  const del = async (n) => {
+    if (!confirm('Delete this note?')) return;
+    try { await base44.portal.deleteNote(portal.id, n.id); toast.success('Note deleted'); reloadNotes(); }
+    catch (err) { toast.error(err.message || 'Couldn\'t delete the note'); }
+  };
+  const list = (notes?.notes || []).filter((n) => !filter || (filter === '__general' ? !n.topic : n.topic === filter));
+  const usedTopics = [...new Set((notes?.notes || []).map((n) => n.topic).filter(Boolean))];
+  return (
+    <>
+      <PageTitle title="Customer notes" sub="Thoughts, questions and comments on this project, shared with the 3 Phase Conveyor team." />
+      {notes?.can_write && (
+        <section className={`${card} p-4 mb-5`} aria-label="New note">
+          <NoteForm initial={initialTopic ? { topic: initialTopic } : undefined} topics={topics} onSubmit={add} submitLabel="Add note" />
+        </section>
+      )}
+      {notes == null ? <div className="flex items-center gap-2 text-muted-foreground py-10 justify-center"><Loader2 className="w-5 h-5 animate-spin" /> Loading…</div>
+        : !notes.notes.length ? <Empty>No notes yet.{notes.can_write ? ' Add the first one above.' : ''}</Empty> : (
+          <>
+            {usedTopics.length > 0 && (
+              <div className="mb-3">
+                <select aria-label="Show notes regarding" value={filter} onChange={(e) => setFilter(e.target.value)} className="px-3 py-2 rounded-lg border border-border bg-card text-sm max-w-full">
+                  <option value="">All notes ({notes.notes.length})</option>
+                  <option value="__general">General</option>
+                  {usedTopics.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+            )}
+            <ul className="grid grid-cols-1 gap-3">
+              {list.map((n) => (
+                <li key={n.id} className={`${card} p-4 ${n.author_kind === 'internal' ? 'border-l-4 border-l-primary' : ''}`}>
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold break-words">
+                        {n.author_name}
+                        {n.author_kind === 'internal' && n.author_name !== '3 Phase Conveyor' && <span className="ml-2 align-middle text-[11px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">3 Phase</span>}
+                        {n.mine && <span className="ml-2 align-middle text-[11px] text-muted-foreground font-normal">(you)</span>}
+                      </div>
+                      <div className="text-xs text-muted-foreground">{fmtWhen(n.created_date)}{n.updated_date ? ` · edited ${fmtWhen(n.updated_date)}` : ''}</div>
+                    </div>
+                    {editing !== n.id && (n.can_edit || n.can_delete) && (
+                      <div className="flex items-center gap-1.5">
+                        {n.can_edit && <button type="button" onClick={() => setEditing(n.id)} className={btn}><Pencil className="w-3.5 h-3.5" aria-hidden="true" /> Edit</button>}
+                        {n.can_delete && <button type="button" onClick={() => del(n)} className={`${btn} text-destructive`} aria-label="Delete note"><Trash2 className="w-4 h-4" aria-hidden="true" /></button>}
+                      </div>
+                    )}
+                  </div>
+                  {editing === n.id ? (
+                    <div className="mt-3"><NoteForm initial={n} topics={topics} onSubmit={save(n)} onCancel={() => setEditing(null)} submitLabel="Save" /></div>
+                  ) : (
+                    <>
+                      {n.topic && <p className="mt-2 text-xs"><span className="text-muted-foreground">Regarding:</span> <span className="font-medium">{n.topic}</span></p>}
+                      <p className="mt-2 text-sm whitespace-pre-line break-words">{n.body}</p>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+    </>
+  );
+}
+
 // ===================== Manage (editors) =====================
 // Replace the portal's tables with a newer copy of the workbook; the file is
 // also kept under Documents.
@@ -803,7 +916,9 @@ export default function Portal() {
   const isCustomer = user?.role === 'customer';
   const load = useCallback(() => base44.portal.get(id).then(setPortal).catch(() => setPortal(null)), [id]);
   const loadDocs = useCallback(() => base44.portal.listDocs(id).then(setDocs).catch(() => setDocs([])), [id]);
-  useEffect(() => { if (user) { load(); loadDocs(); } }, [user, load, loadDocs]);
+  const [notes, setNotes] = useState(null);
+  const loadNotes = useCallback(() => base44.portal.listNotes(id).then(setNotes).catch(() => setNotes({ can_write: false, notes: [] })), [id]);
+  useEffect(() => { if (user) { load(); loadDocs(); loadNotes(); } }, [user, load, loadDocs, loadNotes]);
 
   // Editors see the tables as the customer does unless they switch it off.
   const sections = useMemo(() => {
@@ -837,6 +952,7 @@ export default function Portal() {
     { key: 'invoicing', label: 'Invoicing', icon: Receipt, count: dash.invoices.length },
     { key: 'schedule', label: 'Schedule', icon: CalendarRange },
     { key: 'documents', label: 'Documents', icon: FolderOpen, count: docs?.length },
+    { key: 'notes', label: 'Customer notes', icon: MessageSquareText, count: notes?.notes.length },
     ...(dash.sections.other.length ? [{ key: 'tables', label: 'More tables', icon: Table2, count: dash.sections.other.length }] : []),
     ...(portal.can_edit ? [{ key: 'manage', label: 'Manage', icon: Settings2 }] : []),
   ] : [];
@@ -890,7 +1006,11 @@ export default function Portal() {
     else if (current === 'sow') page = <ScopeOfWork dash={dash} openSow={setSowLine} />;
     else if (current === 'invoicing') page = <TablesView title="Invoicing" sections={dash.sections.invoicing ? [dash.sections.invoicing] : []} emptyText="No invoicing table in the project workbook." />;
     else if (current === 'schedule') page = <Schedule portal={portal} docs={docs} reloadDocs={loadDocs} />;
-    else if (current === 'documents') page = <Documents portal={portal} docs={docs} reloadDocs={loadDocs} openDocId={params.get('doc')} setOpenDocId={setOpenDocId} />;
+    else if (current === 'notes') {
+      const topics = dash.changeOrders.map((c) => `Change order ${c.ref ? `${c.ref} ` : ''}– ${c.title}`.replace(/\s+/g, ' ').slice(0, 200));
+      page = <Notes portal={portal} notes={notes} reloadNotes={loadNotes} topics={[...new Set(topics)]} initialTopic={params.get('topic') || ''}
+        clearTopic={() => { if (params.get('topic')) { const n = new URLSearchParams(params); n.delete('topic'); setParams(n, { replace: true }); } }} />;
+    } else if (current === 'documents') page = <Documents portal={portal} docs={docs} reloadDocs={loadDocs} openDocId={params.get('doc')} setOpenDocId={setOpenDocId} />;
     else if (current === 'tables') page = <TablesView title="More tables" sections={dash.sections.other} emptyText="No other tables." />;
     else if (current === 'manage') page = <Manage portal={portal} reload={load} reloadDocs={loadDocs} />;
   }
@@ -935,6 +1055,11 @@ export default function Portal() {
               {co.amount != null && <span className="text-xl font-bold tabular-nums">{money(co.amount, true)}</span>}
             </div>
             {co.description && <p className="text-sm whitespace-pre-line break-words">{co.description}</p>}
+            {notes?.can_write && (
+              <button type="button" onClick={() => { const t = `Change order ${co.ref ? `${co.ref} ` : ''}– ${co.title}`.replace(/\s+/g, ' ').slice(0, 200); setCo(null); go('notes', { topic: t }); }} className={btn}>
+                <MessageSquareText className="w-4 h-4" aria-hidden="true" /> Add a note about this change order
+              </button>
+            )}
             <Fields fields={co.fields} />
           </div>
         )}

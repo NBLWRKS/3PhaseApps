@@ -174,9 +174,83 @@ router.delete('/:id', (req, res) => {
   db.transaction(() => {
     for (const u of db.prepare("SELECT id, email FROM users WHERE role = 'customer' AND portal_id = ?").all(p.id)) removeLogin(u, req.user.email);
     db.prepare('DELETE FROM portal_documents WHERE portal_id = ?').run(p.id);
+    db.prepare('DELETE FROM portal_notes WHERE portal_id = ?').run(p.id);
     db.prepare('DELETE FROM portals WHERE id = ?').run(p.id);
   })();
   try { fs.rmSync(docDir(p.id), { recursive: true, force: true }); } catch { /* ignore */ }
+  res.json({ ok: true });
+});
+
+// ===== Customer Notes =====
+// A running list of notes on the portal. That portal's customer logins and our
+// editors can write; internal read-only users can read. Authors edit their own
+// notes; authors and our editors can delete. Customers see our people as
+// "3 Phase Conveyor" unless they have a name on their account.
+const canWriteNotes = (u, p) => !!p && (isCustomer(u) ? u.portal_id === p.id : internalLevel(u, 'edit'));
+function noteOut(n, u, p) {
+  const mine = n.author_id === u.id;
+  return {
+    id: n.id, topic: n.topic || '', body: n.body, author_kind: n.author_kind,
+    author_name: n.author_name || (n.author_kind === 'internal' ? '3 Phase Conveyor' : 'Customer'),
+    created_date: n.created_date, updated_date: n.updated_date || null,
+    mine, can_delete: mine || (!isCustomer(u) && internalLevel(u, 'edit')),
+    can_edit: mine && canWriteNotes(u, p),
+  };
+}
+function noteInput(b) {
+  const body = String(b?.body ?? '').trim();
+  if (!body) return { error: 'Write a note first' };
+  if (body.length > 5000) return { error: 'Notes are limited to 5,000 characters' };
+  return { body, topic: String(b?.topic ?? '').trim().slice(0, 200) || null };
+}
+const authorName = (u) => (u.full_name && String(u.full_name).trim()) || (isCustomer(u) ? u.email : null);
+
+// GET /api/portal/:id/notes -> newest first
+router.get('/:id/notes', (req, res) => {
+  const p = getPortal(req.params.id);
+  if (!canView(req.user, p)) return res.status(404).json({ error: 'Portal not found' });
+  const rows = db.prepare('SELECT * FROM portal_notes WHERE portal_id = ? ORDER BY created_date DESC').all(p.id);
+  res.json({ can_write: canWriteNotes(req.user, p), notes: rows.map((n) => noteOut(n, req.user, p)) });
+});
+
+// POST /api/portal/:id/notes {body, topic?}
+router.post('/:id/notes', (req, res) => {
+  const p = getPortal(req.params.id);
+  if (!canView(req.user, p)) return res.status(404).json({ error: 'Portal not found' });
+  if (!canWriteNotes(req.user, p)) return res.status(403).json({ error: 'You have read-only access to these notes' });
+  const v = noteInput(req.body);
+  if (v.error) return res.status(400).json({ error: v.error });
+  const n = {
+    id: id(), portal_id: p.id, topic: v.topic, body: v.body, author_id: req.user.id,
+    author_name: authorName(req.user), author_kind: isCustomer(req.user) ? 'customer' : 'internal', created_date: now(),
+  };
+  db.prepare(`INSERT INTO portal_notes (id, portal_id, topic, body, author_id, author_name, author_kind, created_date)
+    VALUES (@id, @portal_id, @topic, @body, @author_id, @author_name, @author_kind, @created_date)`).run(n);
+  res.json(noteOut(n, req.user, p));
+});
+
+// PUT /api/portal/:id/notes/:noteId {body, topic?}  (author only)
+router.put('/:id/notes/:noteId', (req, res) => {
+  const p = getPortal(req.params.id);
+  if (!canView(req.user, p)) return res.status(404).json({ error: 'Portal not found' });
+  const n = db.prepare('SELECT * FROM portal_notes WHERE id = ? AND portal_id = ?').get(req.params.noteId, p.id);
+  if (!n) return res.status(404).json({ error: 'Note not found' });
+  if (n.author_id !== req.user.id || !canWriteNotes(req.user, p)) return res.status(403).json({ error: 'You can only edit your own notes' });
+  const v = noteInput(req.body);
+  if (v.error) return res.status(400).json({ error: v.error });
+  const updated = now();
+  db.prepare('UPDATE portal_notes SET body = ?, topic = ?, updated_date = ? WHERE id = ?').run(v.body, v.topic, updated, n.id);
+  res.json(noteOut({ ...n, body: v.body, topic: v.topic, updated_date: updated }, req.user, p));
+});
+
+// DELETE /api/portal/:id/notes/:noteId  (author, or our editors)
+router.delete('/:id/notes/:noteId', (req, res) => {
+  const p = getPortal(req.params.id);
+  if (!canView(req.user, p)) return res.status(404).json({ error: 'Portal not found' });
+  const n = db.prepare('SELECT * FROM portal_notes WHERE id = ? AND portal_id = ?').get(req.params.noteId, p.id);
+  if (!n) return res.status(404).json({ error: 'Note not found' });
+  if (!noteOut(n, req.user, p).can_delete) return res.status(403).json({ error: 'You can only delete your own notes' });
+  db.prepare('DELETE FROM portal_notes WHERE id = ?').run(n.id);
   res.json({ ok: true });
 });
 

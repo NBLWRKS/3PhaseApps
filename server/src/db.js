@@ -328,6 +328,19 @@ db.exec(`
     uploaded_by TEXT,
     uploaded_date TEXT NOT NULL
   );
+  -- Customer Notes: comments customers (and our editors) leave on a portal.
+  CREATE TABLE IF NOT EXISTS portal_notes (
+    id TEXT PRIMARY KEY,
+    portal_id TEXT NOT NULL,
+    topic TEXT,                              -- optional, e.g. a change order it's about
+    body TEXT NOT NULL,
+    author_id TEXT NOT NULL,
+    author_name TEXT,
+    author_kind TEXT NOT NULL,               -- 'customer' | 'internal'
+    created_date TEXT NOT NULL,
+    updated_date TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_portal_notes_portal ON portal_notes(portal_id, created_date);
 `);
 ensureColumn('highlights', 'updated_by', 'TEXT');
 ensureColumn('highlights', 'pages', "TEXT NOT NULL DEFAULT '[]'");

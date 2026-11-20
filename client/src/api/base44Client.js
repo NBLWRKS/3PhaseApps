@@ -155,6 +155,10 @@ const portal = {
     return request('POST', `/portal/${id}/documents`, { body: fd, isForm: true });
   },
   deleteDoc: (id, docId) => request('DELETE', `/portal/${id}/documents/${docId}`),
+  listNotes: (id) => request('GET', `/portal/${id}/notes`),
+  addNote: (id, data) => request('POST', `/portal/${id}/notes`, { body: data }),
+  updateNote: (id, noteId, data) => request('PUT', `/portal/${id}/notes/${noteId}`, { body: data }),
+  deleteNote: (id, noteId) => request('DELETE', `/portal/${id}/notes/${noteId}`),
   // The file's bytes (sent with the sign-in token, so it can't be a plain link).
   fetchDoc: async (id, docId) => {
     const token = getToken();

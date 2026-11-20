@@ -3,9 +3,10 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Building2, Mail, Lock, Loader2 } from 'lucide-react';
+import { Mail, Lock, Loader2 } from 'lucide-react';
 import AuthLayout from '@/components/AuthLayout';
 import usePortalLight from '@/lib/usePortalLight';
+import logo from '@/assets/logo.jpg';
 
 // Sign-in page for the Customer Portal: the address we give to customers.
 // Same accounts system as the rest of the app, but no sign-up link, and it
@@ -32,7 +33,7 @@ export default function PortalLogin() {
 
   return (
     <AuthLayout
-      icon={Building2}
+      logo={logo}
       title="Customer Portal"
       subtitle="3 Phase Conveyor project updates"
       footer={<>Need access or a new password? Contact your 3 Phase Conveyor project manager.</>}
