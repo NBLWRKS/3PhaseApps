@@ -157,7 +157,8 @@ router.put('/:id', (req, res) => {
     hidden = cleanHidden(b.hidden_columns);
     if (!hidden) return res.status(400).json({ error: 'Hidden columns are not in the expected format' });
   }
-  if (b.sections !== undefined) hidden = defaultHidden(sections, hidden);
+  // Only the new dashboard (in testing) asks for the default hidden SOW columns.
+  if (b.sections !== undefined && b.default_hidden === true) hidden = defaultHidden(sections, hidden);
   const name = b.name != null ? String(b.name).trim().slice(0, 200) || p.name : p.name;
   const customer = b.customer !== undefined ? (String(b.customer || '').trim().slice(0, 200) || null) : p.customer;
   const source_file = b.source_file !== undefined ? (String(b.source_file || '').slice(0, 300) || null) : p.source_file;

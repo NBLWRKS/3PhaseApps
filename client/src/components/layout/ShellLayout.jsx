@@ -9,9 +9,10 @@ import AppSidebar from './AppSidebar';
 export default function ShellLayout() {
   const { isAuthenticated, user } = useAuth();
   const { pathname } = useLocation();
-  // Customer Portal logins get no internal navigation at all, and a single
-  // portal has its own section menu on the left instead of the app sidebar.
-  const inPortal = /^\/portal\/(?!login$)[^/]+/i.test(pathname);
+  // Customer Portal logins get no internal navigation at all, and the new
+  // portal dashboard (in testing at /portal/:id/beta) has its own section menu
+  // on the left instead of the app sidebar.
+  const inPortal = /^\/portal\/[^/]+\/beta\/?$/i.test(pathname);
   const sidebar = isAuthenticated && user?.role !== 'customer' && !inPortal;
   return (
     <>
