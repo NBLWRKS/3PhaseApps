@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Building2, FileSpreadsheet, Loader2, LogOut, KeyRound, UserX, UserPlus, Copy, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Building2, FileSpreadsheet, Loader2, LogOut, KeyRound, UserX, UserPlus, Copy, Pencil, Trash2, FileText, FilePlus2, Download, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
@@ -9,6 +9,8 @@ import { sheetsToSections, formatCell, alignRight } from '@/lib/portalSections';
 import AppSwitcher from '@/components/layout/AppSwitcher';
 import logo from '@/assets/logo.jpg';
 import usePortalLight from '@/lib/usePortalLight';
+import PdfViewer from '@/components/portal/PdfViewer';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 
 const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }); } catch { return ''; } };
 
@@ -21,13 +23,48 @@ function generatePassword() {
 }
 const copy = async (t) => { try { await navigator.clipboard.writeText(t); toast.success('Copied'); } catch { /* selectable on screen */ } };
 
+// Change order tables (e.g. "Pending COs", "Approved COs"): each line can have
+// a PDF of the change order. A line is identified across workbook re-uploads by
+// table + scope + CO number (Approved) or change order name (Pending), falling
+// back to the # column, e.g. "Approved COs|EI|CO4".
+const isCoSection = (s) => /\bCOs?\b|change order/i.test(`${s.title} ${s.subtitle || ''}`);
+function coLine(section) {
+  if (!isCoSection(section)) return null;
+  const at = (re) => section.columns.findIndex((c) => re.test(c.label || ''));
+  const iScope = at(/^scope$/i), iCo = at(/^co\s*#$/i), iName = at(/^change order$/i), iNo = at(/^#$/), iDesc = at(/description/i);
+  const cell = (r, i) => (i >= 0 && r.cells[i] != null ? String(r.cells[i]).trim() : '');
+  return (r) => {
+    if (r.total) return null;
+    const id = cell(r, iCo) || cell(r, iName) || cell(r, iNo);
+    if (!id) return null;
+    const scope = cell(r, iScope);
+    const label = [scope, cell(r, iCo) || (cell(r, iNo) && `#${cell(r, iNo)}`), cell(r, iName)].filter(Boolean).join(' ');
+    return { key: `${section.title}|${scope}|${id}`.slice(0, 300), label: label || id, detail: cell(r, iDesc) };
+  };
+}
+
 // One table from the workbook, always shown in full with no sideways scrolling.
 // It's drawn as a table when every column fits the space available (wide
 // tables use a more compact size); if it doesn't fit, e.g. on a phone or a
 // 16-column sheet on a laptop, each row becomes a card of label/value pairs.
 // The table stays laid out (hidden) so the check re-runs as the window resizes.
-function SectionTable({ section }) {
+function SectionTable({ section, pdfs, canEdit, onOpenLine }) {
   const { columns, rows } = section;
+  const lineOf = onOpenLine ? coLine(section) : null;
+  // A line opens when it has a PDF, or for editors (to attach one).
+  const lineFor = (r) => {
+    const l = lineOf && lineOf(r);
+    if (!l) return null;
+    const pdf = pdfs?.[l.key];
+    return pdf || canEdit ? { ...l, pdf } : null;
+  };
+  const icon = (l) => (
+    <button type="button" onClick={(e) => { e.stopPropagation(); onOpenLine(l); }}
+      aria-label={l.pdf ? `View PDF: ${l.label}` : `Attach PDF: ${l.label}`} title={l.pdf ? 'View change order PDF' : 'Attach a PDF'}
+      className={`inline-flex align-middle p-0.5 rounded ${l.pdf ? 'text-primary hover:bg-primary/10' : 'text-muted-foreground/60 hover:text-foreground'}`}>
+      {l.pdf ? <FileText className="w-4 h-4" aria-hidden="true" /> : <FilePlus2 className="w-4 h-4" aria-hidden="true" />}
+    </button>
+  );
   const wrapRef = useRef(null);
   const tableRef = useRef(null);
   const [fits, setFits] = useState(true);
@@ -58,15 +95,21 @@ function SectionTable({ section }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r, ri) => (
-              <tr key={ri} className={r.total ? 'font-semibold bg-secondary' : 'even:bg-secondary/40'}>
-                {columns.map((c, ci) => (
-                  <td key={ci} className={`${pad} py-1.5 border-b border-border/70 align-top break-words ${alignRight(c.kind) ? 'text-right whitespace-nowrap' : 'text-left whitespace-pre-line'}`}>
-                    {formatCell(r.cells[ci], c.kind)}
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {rows.map((r, ri) => {
+              const l = lineFor(r);
+              return (
+                <tr key={ri} onClick={l ? () => onOpenLine(l) : undefined}
+                  className={`${r.total ? 'font-semibold bg-secondary' : 'even:bg-secondary/40'} ${l ? 'cursor-pointer hover:bg-primary/5' : ''}`}>
+                  {columns.map((c, ci) => (
+                    <td key={ci} className={`${pad} py-1.5 border-b border-border/70 align-top break-words ${alignRight(c.kind) ? 'text-right whitespace-nowrap' : 'text-left whitespace-pre-line'}`}>
+                      {ci === 0 && l
+                        ? <span className="inline-flex items-center gap-0.5 whitespace-nowrap">{icon(l)}{formatCell(r.cells[ci], c.kind)}</span>
+                        : formatCell(r.cells[ci], c.kind)}
+                    </td>
+                  ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -76,8 +119,15 @@ function SectionTable({ section }) {
           {rows.map((r, ri) => {
             const items = filled(r);
             if (!items.length) return null;
+            const l = lineFor(r);
             return (
-              <li key={ri} className={`rounded-xl border p-3 ${r.total ? 'border-primary/40 bg-secondary font-semibold' : 'border-border bg-card'}`}>
+              <li key={ri} onClick={l ? () => onOpenLine(l) : undefined}
+                className={`rounded-xl border p-3 ${r.total ? 'border-primary/40 bg-secondary font-semibold' : 'border-border bg-card'} ${l ? 'cursor-pointer hover:border-primary/50' : ''}`}>
+                {l && (
+                  <div className="mb-2 -mt-0.5 flex items-center gap-1 text-xs font-medium">
+                    {icon(l)}<span className={l.pdf ? 'text-primary' : 'text-muted-foreground'}>{l.pdf ? 'View change order PDF' : 'Attach a PDF'}</span>
+                  </div>
+                )}
                 <dl className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-x-3 gap-y-1 text-sm">
                   {items.map(({ c, v }, k) => (
                     <React.Fragment key={k}>
@@ -95,7 +145,7 @@ function SectionTable({ section }) {
   );
 }
 
-function Sections({ sections }) {
+function Sections({ sections, pdfs, canEdit, onOpenLine }) {
   const [tab, setTab] = useState(0);
   const i = Math.min(tab, sections.length - 1);
   const s = sections[i];
@@ -111,9 +161,83 @@ function Sections({ sections }) {
       </div>
       <section role="tabpanel" id={`portal-panel-${i}`} aria-labelledby={`portal-tab-${i}`} className="space-y-2">
         {s.subtitle && <h2 className="text-base font-semibold">{s.subtitle}</h2>}
-        <SectionTable section={s} />
+        {onOpenLine && isCoSection(s) && ((pdfs && Object.keys(pdfs).some((k) => k.startsWith(`${s.title}|`))) || canEdit) && (
+          <p className="text-xs text-muted-foreground">{canEdit ? 'Click a line to view its change order PDF, or to attach one.' : 'Click a line with a document icon to view the change order PDF.'}</p>
+        )}
+        <SectionTable section={s} pdfs={pdfs} canEdit={canEdit} onOpenLine={onOpenLine} />
       </section>
     </div>
+  );
+}
+
+// Panel showing one change order's PDF. Editors can attach, replace or remove it.
+function CoPdfPanel({ portal, line, onClose, onChanged }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const inputRef = useRef(null);
+  const pdf = line?.pdf;
+  useEffect(() => {
+    setData(null); setError('');
+    if (!pdf) return undefined;
+    let cancelled = false;
+    base44.portal.fetchCoPdf(portal.id, pdf.id).then((d) => { if (!cancelled) setData(d); }).catch((err) => { if (!cancelled) setError(err.message); });
+    return () => { cancelled = true; };
+  }, [portal.id, pdf]);
+  const download = () => {
+    if (!data) return;
+    const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+    const a = document.createElement('a'); a.href = url; a.download = pdf.name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
+  const upload = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!/\.pdf$/i.test(file.name)) { toast.error('Choose a PDF file.'); return; }
+    if (file.size > 50 * 1024 * 1024) { toast.error('That PDF is over 50 MB.'); return; }
+    setBusy(true);
+    try { const saved = await base44.portal.uploadCoPdf(portal.id, line.key, file); toast.success('PDF attached'); onChanged(line, saved); }
+    catch (err) { toast.error(err.message || 'Upload failed'); }
+    setBusy(false);
+  };
+  const remove = async () => {
+    if (!confirm(`Remove the PDF from ${line.label}? Customers will no longer see it.`)) return;
+    try { await base44.portal.deleteCoPdf(portal.id, pdf.id); toast.success('PDF removed'); onChanged(line, null); }
+    catch (err) { toast.error(err.message || 'Couldn\'t remove the PDF'); }
+  };
+  return (
+    <Sheet open={!!line} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <SheetContent side="right" className="w-full sm:max-w-4xl overflow-y-auto p-4 sm:p-6">
+        <SheetTitle className="pr-8 leading-snug">{line?.label}</SheetTitle>
+        <SheetDescription className={line?.detail ? 'line-clamp-3' : 'sr-only'}>{line?.detail || 'Change order PDF'}</SheetDescription>
+        {line && (
+          <div className="mt-4 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              {pdf && <button type="button" onClick={download} disabled={!data} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm hover:bg-secondary disabled:opacity-50"><Download className="w-4 h-4" aria-hidden="true" /> Download</button>}
+              {portal.can_edit && (
+                <>
+                  <input ref={inputRef} type="file" accept=".pdf,application/pdf" onChange={upload} className="hidden" />
+                  <button type="button" onClick={() => inputRef.current?.click()} disabled={busy}
+                    className={pdf ? 'flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm hover:bg-secondary disabled:opacity-50' : 'flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50'}>
+                    {busy ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Upload className="w-4 h-4" aria-hidden="true" />} {pdf ? 'Replace PDF' : 'Attach PDF'}
+                  </button>
+                  {pdf && <button type="button" onClick={remove} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm text-destructive hover:bg-secondary"><Trash2 className="w-4 h-4" aria-hidden="true" /> Remove</button>}
+                </>
+              )}
+              {pdf && <span className="text-xs text-muted-foreground">{pdf.name} · added {fmtDate(pdf.uploaded_date)}</span>}
+            </div>
+            {!pdf ? (
+              <div className="text-center py-14 rounded-2xl border border-dashed border-border text-sm text-muted-foreground">
+                No PDF attached to this change order yet.{portal.can_edit ? ' Attach one and customers will see it when they click this line.' : ''}
+              </div>
+            ) : error ? <p className="text-sm text-destructive py-8 text-center">{error}</p>
+              : !data ? <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /> Loading…</div>
+                : <PdfViewer data={data} title={pdf.name} />}
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -299,7 +423,14 @@ export default function Portal() {
   const [portal, setPortal] = useState(undefined);
   const isCustomer = user?.role === 'customer';
   const load = useCallback(() => base44.portal.get(id).then(setPortal).catch(() => setPortal(null)), [id]);
-  useEffect(() => { if (user) load(); }, [user, load]);
+  const [pdfs, setPdfs] = useState({}); // row_key -> PDF
+  const loadPdfs = useCallback(() => base44.portal.listCoPdfs(id).then((list) => setPdfs(Object.fromEntries(list.map((x) => [x.row_key, x])))).catch(() => setPdfs({})), [id]);
+  const [line, setLine] = useState(null);
+  useEffect(() => { if (user) { load(); loadPdfs(); } }, [user, load, loadPdfs]);
+  const pdfChanged = (l, saved) => {
+    setPdfs((m) => { const n = { ...m }; if (saved) n[l.key] = saved; else delete n[l.key]; return n; });
+    setLine({ ...l, pdf: saved || undefined });
+  };
 
   if (isLoadingAuth) return null;
   if (!user) return <Navigate to="/portal/login" replace />;
@@ -342,12 +473,13 @@ export default function Portal() {
               {portal.can_edit && <PortalSettings portal={portal} isAdmin={portal.can_manage_logins} onSaved={load} />}
             </div>
             {portal.can_edit && <WorkbookUpload portal={portal} onSaved={load} />}
-            {portal.sections.length ? <Sections sections={portal.sections} /> : (
+            {portal.sections.length ? <Sections sections={portal.sections} pdfs={pdfs} canEdit={portal.can_edit} onOpenLine={setLine} /> : (
               <div className="text-center py-14 rounded-2xl border border-dashed border-border text-sm text-muted-foreground">
                 {portal.can_edit ? 'Upload the project workbook above to fill this portal.' : 'Project information will appear here soon.'}
               </div>
             )}
             {portal.can_manage_logins && <CustomerLogins portal={portal} />}
+            <CoPdfPanel portal={portal} line={line} onClose={() => setLine(null)} onChanged={pdfChanged} />
           </>
         )}
       </main>

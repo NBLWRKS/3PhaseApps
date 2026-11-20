@@ -146,6 +146,21 @@ const portal = {
   addLogin: (id, data) => request('POST', `/portal/${id}/customers`, { body: data }),
   resetLogin: (id, uid, password) => request('POST', `/portal/${id}/customers/${uid}/password`, { body: { password } }),
   removeLogin: (id, uid) => request('DELETE', `/portal/${id}/customers/${uid}`),
+  listCoPdfs: (id) => request('GET', `/portal/${id}/co-pdfs`),
+  uploadCoPdf: (id, rowKey, file) => {
+    const fd = new FormData();
+    fd.append('row_key', rowKey);
+    fd.append('file', file);
+    return request('POST', `/portal/${id}/co-pdfs`, { body: fd, isForm: true });
+  },
+  deleteCoPdf: (id, pdfId) => request('DELETE', `/portal/${id}/co-pdfs/${pdfId}`),
+  // The PDF's bytes (sent with the sign-in token, so it can't be a plain link).
+  fetchCoPdf: async (id, pdfId) => {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/portal/${id}/co-pdfs/${pdfId}/file`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) { const err = new Error(res.status === 404 ? 'That PDF is no longer available.' : 'Couldn\'t open the PDF'); err.status = res.status; throw err; }
+    return res.arrayBuffer();
+  },
 };
 
 // Highlight app: convert PDFs to PNG and manage highlighted conveyor docs.

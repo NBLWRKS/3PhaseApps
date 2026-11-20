@@ -316,6 +316,22 @@ db.exec(`
     updated_date TEXT NOT NULL
   );
 `);
+// Customer Portal: one PDF per change order line (Pending / Approved COs).
+// row_key identifies the line across workbook re-uploads, e.g.
+// "Approved COs|EI|CO4" or "Pending COs|MI|W6 Support Relocation".
+db.exec(`
+  CREATE TABLE IF NOT EXISTS portal_co_pdfs (
+    id TEXT PRIMARY KEY,
+    portal_id TEXT NOT NULL,
+    row_key TEXT NOT NULL,
+    name TEXT NOT NULL,          -- original file name
+    stored_file TEXT NOT NULL,   -- under uploads/portal/<portal_id>/
+    size INTEGER,
+    uploaded_by TEXT,
+    uploaded_date TEXT NOT NULL,
+    UNIQUE (portal_id, row_key)
+  );
+`);
 ensureColumn('highlights', 'updated_by', 'TEXT');
 ensureColumn('highlights', 'pages', "TEXT NOT NULL DEFAULT '[]'");
 ensureColumn('highlights', 'project', 'TEXT');

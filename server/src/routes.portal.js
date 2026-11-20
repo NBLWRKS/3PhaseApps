@@ -11,9 +11,13 @@
 //     and delete portals.
 import express from 'express';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import multer from 'multer';
 import db from './db.js';
 import { authRequired, hashPassword } from './auth.js';
 import { hasAppLevel } from './apps.js';
+import { uploadDir } from './routes.uploads.js';
 
 const router = express.Router();
 const id = () => crypto.randomBytes(12).toString('hex');
@@ -125,8 +129,87 @@ router.delete('/:id', (req, res) => {
   if (!p) return res.status(404).json({ error: 'Portal not found' });
   db.transaction(() => {
     for (const u of db.prepare("SELECT id, email FROM users WHERE role = 'customer' AND portal_id = ?").all(p.id)) removeLogin(u, req.user.email);
+    db.prepare('DELETE FROM portal_co_pdfs WHERE portal_id = ?').run(p.id);
     db.prepare('DELETE FROM portals WHERE id = ?').run(p.id);
   })();
+  try { fs.rmSync(pdfDir(p.id), { recursive: true, force: true }); } catch { /* ignore */ }
+  res.json({ ok: true });
+});
+
+// ===== Change order PDFs =====
+// One PDF per change order line. Stored under uploads/portal/<portal id>/,
+// which /uploads never serves; only this portal's customers and our internal
+// users can open them, through here.
+const pdfDir = (pid) => path.join(uploadDir, 'portal', String(pid).replace(/[^a-zA-Z0-9]/g, ''));
+const pdfUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, _file, cb) => { const d = pdfDir(req.params.id); fs.mkdirSync(d, { recursive: true }); cb(null, d); },
+    filename: (_req, _file, cb) => cb(null, `${id()}.pdf`),
+  }),
+  limits: { fileSize: 50 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => cb(null, /\.pdf$/i.test(file.originalname || '')),
+});
+const pdfRow = (d) => ({ id: d.id, row_key: d.row_key, name: d.name, size: d.size, uploaded_date: d.uploaded_date });
+function editorFor(req, res) {
+  const p = getPortal(req.params.id);
+  if (!p || isCustomer(req.user) || !internalLevel(req.user, 'read')) { res.status(404).json({ error: 'Portal not found' }); return null; }
+  if (!internalLevel(req.user, 'edit')) { res.status(403).json({ error: 'You have read-only access to the Customer Portal' }); return null; }
+  return p;
+}
+const removePdfFile = (pid, stored) => { try { fs.unlinkSync(path.join(pdfDir(pid), path.basename(stored))); } catch { /* already gone */ } };
+
+// GET /api/portal/:id/co-pdfs -> which change order lines have a PDF
+router.get('/:id/co-pdfs', (req, res) => {
+  const p = getPortal(req.params.id);
+  if (!canView(req.user, p)) return res.status(404).json({ error: 'Portal not found' });
+  res.json(db.prepare('SELECT * FROM portal_co_pdfs WHERE portal_id = ?').all(p.id).map(pdfRow));
+});
+
+// GET /api/portal/:id/co-pdfs/:pdfId/file  (?download=1 to save instead of view)
+router.get('/:id/co-pdfs/:pdfId/file', (req, res) => {
+  const p = getPortal(req.params.id);
+  if (!canView(req.user, p)) return res.status(404).json({ error: 'Portal not found' });
+  const d = db.prepare('SELECT * FROM portal_co_pdfs WHERE id = ? AND portal_id = ?').get(req.params.pdfId, p.id);
+  if (!d) return res.status(404).json({ error: 'PDF not found' });
+  const full = path.join(pdfDir(p.id), path.basename(d.stored_file));
+  if (!fs.existsSync(full)) return res.status(404).json({ error: 'PDF missing' });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Disposition', `${req.query.download ? 'attachment' : 'inline'}; filename="${d.name.replace(/[^\w.\- ()]/g, '_')}"`);
+  fs.createReadStream(full).pipe(res);
+});
+
+// POST /api/portal/:id/co-pdfs  multipart: file (.pdf), row_key  (edit access; replaces that line's PDF)
+router.post('/:id/co-pdfs', (req, res, next) => { if (editorFor(req, res)) next(); },
+  (req, res, next) => pdfUpload.single('file')(req, res, (err) => (err
+    ? res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'That PDF is over 50 MB.' : 'Upload failed' })
+    : next())),
+  (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'Choose a PDF file (50 MB max).' });
+    const rowKey = String(req.body?.row_key || '').trim().slice(0, 300);
+    if (!rowKey) { removePdfFile(req.params.id, req.file.filename); return res.status(400).json({ error: 'Missing change order' }); }
+    const old = db.prepare('SELECT * FROM portal_co_pdfs WHERE portal_id = ? AND row_key = ?').get(req.params.id, rowKey);
+    const row = {
+      id: id(), portal_id: req.params.id, row_key: rowKey,
+      name: String(req.file.originalname || 'Change order.pdf').slice(0, 200),
+      stored_file: req.file.filename, size: req.file.size, uploaded_by: req.user.email, uploaded_date: now(),
+    };
+    db.transaction(() => {
+      if (old) db.prepare('DELETE FROM portal_co_pdfs WHERE id = ?').run(old.id);
+      db.prepare(`INSERT INTO portal_co_pdfs (id, portal_id, row_key, name, stored_file, size, uploaded_by, uploaded_date)
+        VALUES (@id, @portal_id, @row_key, @name, @stored_file, @size, @uploaded_by, @uploaded_date)`).run(row);
+    })();
+    if (old) removePdfFile(req.params.id, old.stored_file);
+    res.json(pdfRow(row));
+  });
+
+// DELETE /api/portal/:id/co-pdfs/:pdfId  (edit access)
+router.delete('/:id/co-pdfs/:pdfId', (req, res) => {
+  const p = editorFor(req, res); if (!p) return;
+  const d = db.prepare('SELECT * FROM portal_co_pdfs WHERE id = ? AND portal_id = ?').get(req.params.pdfId, p.id);
+  if (!d) return res.status(404).json({ error: 'PDF not found' });
+  db.prepare('DELETE FROM portal_co_pdfs WHERE id = ?').run(d.id);
+  removePdfFile(p.id, d.stored_file);
   res.json({ ok: true });
 });
 
