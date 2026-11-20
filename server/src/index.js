@@ -44,7 +44,8 @@ app.use('/uploads', (req, res, next) => {
   let p;
   try { p = decodeURIComponent(req.path); } catch { return res.status(400).end(); }
   const rel = path.posix.normalize(p).replace(/^\/+/, '').toLowerCase();
-  if (rel === 'applications' || rel.startsWith('applications/')) return res.status(404).json({ error: 'Not found' });
+  // Customer Portal documents are private too (served by /api/portal/:id/documents).
+  if (rel === 'applications' || rel.startsWith('applications/') || rel === 'portal' || rel.startsWith('portal/')) return res.status(404).json({ error: 'Not found' });
   next();
 }, express.static(uploadDir, { maxAge: '7d' }));
 

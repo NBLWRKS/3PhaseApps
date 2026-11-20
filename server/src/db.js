@@ -316,6 +316,19 @@ db.exec(`
     updated_date TEXT NOT NULL
   );
 `);
+ensureColumn('portals', 'hidden_columns', "TEXT NOT NULL DEFAULT '{}'"); // { sectionTitle: [column labels hidden from customers] }
+db.exec(`
+  CREATE TABLE IF NOT EXISTS portal_documents (
+    id TEXT PRIMARY KEY,
+    portal_id TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'document',  -- 'document' | 'schedule' | 'workbook'
+    name TEXT NOT NULL,                      -- original file name, shown in the list
+    stored_file TEXT NOT NULL,               -- under uploads/portal/<portal_id>/
+    size INTEGER,
+    uploaded_by TEXT,
+    uploaded_date TEXT NOT NULL
+  );
+`);
 ensureColumn('highlights', 'updated_by', 'TEXT');
 ensureColumn('highlights', 'pages', "TEXT NOT NULL DEFAULT '[]'");
 ensureColumn('highlights', 'project', 'TEXT');

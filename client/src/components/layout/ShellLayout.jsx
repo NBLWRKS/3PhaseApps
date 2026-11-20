@@ -1,5 +1,5 @@
 import React from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/lib/AuthContext';
 import AppSidebar from './AppSidebar';
 
@@ -8,8 +8,11 @@ import AppSidebar from './AppSidebar';
 // sign-in and permission checks, exactly as before.
 export default function ShellLayout() {
   const { isAuthenticated, user } = useAuth();
-  // Customer Portal logins get no internal navigation at all.
-  const sidebar = isAuthenticated && user?.role !== 'customer';
+  const { pathname } = useLocation();
+  // Customer Portal logins get no internal navigation at all, and a single
+  // portal has its own section menu on the left instead of the app sidebar.
+  const inPortal = /^\/portal\/(?!login$)[^/]+/i.test(pathname);
+  const sidebar = isAuthenticated && user?.role !== 'customer' && !inPortal;
   return (
     <>
       {sidebar && <AppSidebar />}
